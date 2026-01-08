@@ -1,0 +1,52 @@
+# Dependencies
+
+venv/
+env/
+env311/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+.env
+.env.local
+
+# Audio files (large binary files)
+*.wav
+*.mp3
+*.flac
+*.aac
+*.ogg
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+.cache/
+temp/
+
+data/*
+!data/.gitkeep
+output/*
+!output/.gitkeep
+
+*.pt
+*.faiss
+*.json
