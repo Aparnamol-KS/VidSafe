@@ -2,6 +2,7 @@
 
 venv/
 env/
+env311/
 __pycache__/
 *.pyc
 *.pyo
@@ -45,3 +46,5 @@ data/*
 !data/.gitkeep
 output/*
 !output/.gitkeep
+
+*.pt

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from faster_whisper import WhisperModel
-from extractor import split_audio_ffmpeg, get_audio_duration_seconds
+from .extractor import split_audio_ffmpeg, get_audio_duration_seconds
 
 # CONFIG
 CHUNK_SECONDS = 120

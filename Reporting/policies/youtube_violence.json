@@ -1,0 +1,80 @@
+[
+  {
+    "policy_id": "YT-VIO-001",
+    "policy_name": "Violence and Graphic Content",
+    "category": "Violence",
+    "description": "Content showing physical injury, fighting, bloodshed, or use of weapons is prohibited, especially when graphic or intended to shock viewers.",
+    "triggers": ["fight", "assault", "weapon", "blood", "attack"],
+    "severity_rules": {
+      "weapon": "high",
+      "blood": "high",
+      "fight": "medium"
+    }
+  },
+  {
+    "policy_id": "YT-CHILD-002",
+    "policy_name": "Child Safety",
+    "category": "Child Protection",
+    "description": "Content involving minors must not include violence, physical harm, abuse, or situations that may frighten or traumatize children.",
+    "triggers": ["violence", "weapon", "injury", "fear"],
+    "severity_rules": {
+      "violence": "high",
+      "weapon": "high"
+    }
+  },
+  {
+    "policy_id": "YT-KIDS-003",
+    "policy_name": "YouTube Kids Content Policy",
+    "category": "Kids Content",
+    "description": "Violent, aggressive, or frightening content is not allowed in videos intended for children, including cartoons or animated violence.",
+    "triggers": ["cartoon violence", "aggression", "scary scenes"],
+    "severity_rules": {
+      "aggression": "medium",
+      "violence": "high"
+    }
+  },
+  {
+    "policy_id": "YT-DANG-004",
+    "policy_name": "Dangerous Acts",
+    "category": "Physical Harm",
+    "description": "Content depicting dangerous or violent behavior that could inspire viewers, especially children, to imitate harmful acts is prohibited.",
+    "triggers": ["weapon handling", "explosion", "stunt", "assault"],
+    "severity_rules": {
+      "weapon handling": "high",
+      "explosion": "high"
+    }
+  },
+  {
+    "policy_id": "YT-HAR-005",
+    "policy_name": "Harassment and Threats",
+    "category": "Abuse",
+    "description": "Content that includes violent threats, intimidation, or aggressive behavior toward individuals or groups is prohibited.",
+    "triggers": ["threat", "kill", "attack", "intimidation"],
+    "severity_rules": {
+      "threat": "medium",
+      "violent threat": "high"
+    }
+  },
+  {
+    "policy_id": "YT-AGE-006",
+    "policy_name": "Age-Restricted Content",
+    "category": "Age Restriction",
+    "description": "Content containing non-graphic violence may be age-restricted and should not be accessible to children.",
+    "triggers": ["non-graphic fight", "mild violence"],
+    "severity_rules": {
+      "mild violence": "low",
+      "fight": "medium"
+    }
+  },
+  {
+    "policy_id": "YT-FEAR-007",
+    "policy_name": "Frightening or Disturbing Content",
+    "category": "Psychological Harm",
+    "description": "Content designed to scare, disturb, or psychologically harm viewers, particularly children, is prohibited.",
+    "triggers": ["screams", "panic", "terror", "disturbing visuals"],
+    "severity_rules": {
+      "disturbing": "medium",
+      "terrifying": "high"
+    }
+  }
+]
