@@ -1,5 +1,10 @@
-import os
+# ==================================================
+# IMPORTS (NO MULTIPROCESSING HERE)
+# ==================================================
+import time
+import gc
 from pathlib import Path
+import torch
 
 from .extractor import extract_audio_ffmpeg, get_audio_duration_seconds
 from .transcriber import transcribe_audio_in_chunks
@@ -11,10 +16,9 @@ from .merger import merge_audio_to_video
 def run_audio_moderation(input_video, work_dir="output"):
     """
     Audio moderation pipeline wrapper.
-    Safe for Windows + ffmpeg.
+    Windows + CUDA + Whisper safe.
     """
 
-    # ---- FORCE ABSOLUTE PATHS (CRITICAL FIX) ----
     input_video = Path(input_video).resolve()
     work_dir = Path(work_dir).resolve()
 
@@ -27,40 +31,55 @@ def run_audio_moderation(input_video, work_dir="output"):
     censored_audio = work_dir / "censored_audio.mp3"
     censored_video = work_dir / "censored_video.mp4"
 
-    print("1) Extract audio ...")
-    extract_audio_ffmpeg(
-        str(input_video),
-        str(audio_mp3)
-    )
+    # --------------------------------------------------
+    print("🔊 1) Extracting audio ...", flush=True)
+    extract_audio_ffmpeg(str(input_video), str(audio_mp3))
 
     dur = get_audio_duration_seconds(str(audio_mp3))
-    print(f"Extracted audio duration: {dur:.2f} sec")
+    print(f"✅ Audio extracted ({dur:.2f} sec)", flush=True)
 
-    print("2) Transcribing audio in chunks ...")
+    # --------------------------------------------------
+    print("🎙️ 2) Transcribing audio in chunks ...", flush=True)
     segments = transcribe_audio_in_chunks(str(audio_mp3))
 
-    print("3) Detect toxic sentences and candidate words ...")
+    # ---- HARD CUDA + THREAD BARRIER (CRITICAL) ----
+    print("🧱 Whisper finished — stabilizing process", flush=True)
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    time.sleep(0.5)
+
+    print(f"✅ Transcription complete → {len(segments)} segments", flush=True)
+
+    # --------------------------------------------------
+    print("🧪 3) Running toxicity detection ...", flush=True)
     toxic_sentences, word_level_toxic = find_toxic_sentences_and_words(segments)
+
     print(
-        f"Found {len(toxic_sentences)} toxic sentences, "
-        f"{len(word_level_toxic)} word segments."
+        f"✅ Toxicity complete → {len(word_level_toxic)} toxic words",
+        flush=True
     )
 
-    print("4) Censoring audio ...")
-    censor_audio(
-        str(audio_mp3),
-        word_level_toxic,
-        str(censored_audio)
-    )
-    print("Censored audio saved to:", censored_audio)
+    # --------------------------------------------------
+    if not word_level_toxic:
+        print("⚠️ No toxic words — skipping censoring", flush=True)
+        censored_audio = audio_mp3
+    else:
+        print("✂️ 4) Censoring audio ...", flush=True)
+        censor_audio(str(audio_mp3), word_level_toxic, str(censored_audio))
+        print(f"✅ Censored audio saved → {censored_audio}", flush=True)
 
-    print("5) Merging censored audio back to video ...")
+    # --------------------------------------------------
+    print("🎬 5) Merging audio back to video ...", flush=True)
     merge_audio_to_video(
         str(input_video),
         str(censored_audio),
         str(censored_video)
     )
-    print("Final censored video:", censored_video)
+
+    print(f"🎉 FINAL VIDEO → {censored_video}", flush=True)
 
     return {
         "segments": segments,
@@ -71,15 +90,12 @@ def run_audio_moderation(input_video, work_dir="output"):
     }
 
 
-# --------------------------------------------------
-# OPTIONAL: standalone testing (SAFE)
-# --------------------------------------------------
-if __name__ == "__main__":
-    BASE_DIR = Path(__file__).parent.parent
-    test_video = BASE_DIR / "data" / "video2.mp4"
-    output_dir = BASE_DIR / "output" / "audio"
+# # ==================================================
+# # OPTIONAL STANDALONE TEST
+# # ==================================================
+# if __name__ == "__main__":
+#     BASE_DIR = Path(__file__).parent.parent
+#     test_video = BASE_DIR / "data" / "video2.mp4"
+#     output_dir = BASE_DIR / "output" / "audio"
 
-    results = run_audio_moderation(
-        input_video=test_video,
-        work_dir=output_dir
-    )
+#     run_audio_moderation(test_video, output_dir)

@@ -48,3 +48,5 @@ output/*
 !output/.gitkeep
 
 *.pt
+*.faiss
+*.json

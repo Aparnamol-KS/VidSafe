@@ -37,6 +37,8 @@ def load_models():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     detector = RTDETR(RTDETR_WEIGHTS)
+    detector.model.to(device)
+
     clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device)
     clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
@@ -107,7 +109,8 @@ def run_violence_detection_and_blur(
         frame_index += 1
         time_sec = frame_index / fps
 
-        results = detector(frame, conf=DETECTION_CONF, verbose=False)
+        results = detector(frame, conf=DETECTION_CONF, device=0 if device == "cuda" else "cpu")
+
 
         violent_frame = False
         max_clip_score = 0.0

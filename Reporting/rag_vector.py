@@ -1,24 +1,32 @@
 #!/usr/bin/env python3
 """
-policy_aware_rag.py
+rag_vector.py
 
-- Builds Policy Vector DB (if needed)
+- Builds Policy Vector DB (if missing)
 - Performs Policy-aware RAG reasoning
+- Path-safe & project-structure aware
 """
 
-import os
 import json
+from pathlib import Path
+from datetime import timedelta
+
 import numpy as np
 import faiss
-from datetime import timedelta
 from sentence_transformers import SentenceTransformer
 
 # ==================================================
-# CONFIG
+# BASE PATHS (CRITICAL FIX)
 # ==================================================
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+BASE_DIR = Path(__file__).parent              # VidSafe/Reporting
+POLICIES_DIR = BASE_DIR / "policies"
 
+DEFAULT_POLICY_FILE = POLICIES_DIR / "youtube_violence.json"
+DEFAULT_FAISS_INDEX = BASE_DIR / "policy_index.faiss"
+DEFAULT_METADATA_FILE = BASE_DIR / "policy_metadata.json"
+
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 # ==================================================
 # UTILITY FUNCTIONS
@@ -40,16 +48,16 @@ def determine_severity(detected_objects, severity_rules):
 # ==================================================
 
 def build_policy_vector_db(
-    policy_file,
-    faiss_index_file,
-    metadata_file
+    policy_file: Path,
+    faiss_index_file: Path,
+    metadata_file: Path
 ):
     print("🔧 Building Policy Vector Database...")
 
-    if not os.path.exists(policy_file):
-        raise FileNotFoundError(f"{policy_file} not found")
+    if not policy_file.exists():
+        raise FileNotFoundError(f"Policy file not found: {policy_file}")
 
-    with open(policy_file, "r") as f:
+    with open(policy_file, "r", encoding="utf-8") as f:
         policies = json.load(f)
 
     policy_texts = []
@@ -80,68 +88,77 @@ def build_policy_vector_db(
     index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)
 
-    faiss.write_index(index, faiss_index_file)
+    faiss.write_index(index, str(faiss_index_file))
 
-    with open(metadata_file, "w") as f:
+    with open(metadata_file, "w", encoding="utf-8") as f:
         json.dump(policy_metadata, f, indent=2)
 
     print("✅ Policy Vector DB Created")
+    print(f"📁 FAISS index → {faiss_index_file}")
+    print(f"📁 Metadata   → {metadata_file}")
 
 
 # ==================================================
-# PHASE 2: POLICY-AWARE RAG (WRAPPED)
+# PHASE 2: POLICY-AWARE RAG (CALLED BY main.py)
 # ==================================================
 
 def run_policy_rag(
     evidence_file,
     output_file,
-    policy_file="youtube_violence.json",
-    faiss_index_file="policy_index.faiss",
-    metadata_file="policy_metadata.json"
+    policy_file=DEFAULT_POLICY_FILE,
+    faiss_index_file=DEFAULT_FAISS_INDEX,
+    metadata_file=DEFAULT_METADATA_FILE
 ):
-    """
-    Called by global main.py
-    """
-
     print("🧠 Running Policy-aware RAG Reasoning...")
 
-    # Build vector DB only if missing
-    if not os.path.exists(faiss_index_file) or not os.path.exists(metadata_file):
+    # -------- Normalize paths --------
+    evidence_file = Path(evidence_file)
+    output_file = Path(output_file)
+    policy_file = Path(policy_file)
+    faiss_index_file = Path(faiss_index_file)
+    metadata_file = Path(metadata_file)
+
+    # -------- Build vector DB if missing --------
+    if not faiss_index_file.exists() or not metadata_file.exists():
         build_policy_vector_db(
             policy_file,
             faiss_index_file,
             metadata_file
         )
 
-    for file in [evidence_file, faiss_index_file, metadata_file]:
-        if not os.path.exists(file):
-            raise FileNotFoundError(f"{file} not found")
+    # -------- Sanity checks --------
+    for f in [evidence_file, faiss_index_file, metadata_file]:
+        if not f.exists():
+            raise FileNotFoundError(f"Required file missing: {f}")
 
-    with open(evidence_file, "r") as f:
+    # -------- Load moderation evidence --------
+    with open(evidence_file, "r", encoding="utf-8") as f:
         evidence = json.load(f)
 
-    video_id = evidence["video_id"]
+    video_id = evidence.get("video_id", "unknown")
     violent_segments = evidence.get("violent_segments", [])
     detections = evidence.get("rtdetr_detections", [])
 
-    detected_objects = {d["object"] for d in detections}
+    detected_objects = {d.get("object", "unknown") for d in detections}
 
-    index = faiss.read_index(faiss_index_file)
+    # -------- Load vector DB --------
+    index = faiss.read_index(str(faiss_index_file))
 
-    with open(metadata_file, "r") as f:
+    with open(metadata_file, "r", encoding="utf-8") as f:
         policy_metadata = json.load(f)
 
     embedder = SentenceTransformer(EMBEDDING_MODEL)
 
     violations = []
 
+    # -------- RAG reasoning --------
     for segment in violent_segments:
         start = segment["start_time"]
         end = segment["end_time"]
 
         query = (
             f"violent content involving {', '.join(detected_objects)} "
-            f"in animated videos for children"
+            f"in videos for children"
         )
 
         query_embedding = embedder.encode([query]).astype("float32")
@@ -167,17 +184,20 @@ def run_policy_rag(
                 )
             })
 
-    # Remove duplicates
+    # -------- Deduplicate --------
     unique = {json.dumps(v, sort_keys=True): v for v in violations}
     violations = list(unique.values())
 
+    # -------- Save output --------
     output = {
         "video_id": video_id,
         "total_violations": len(violations),
         "policy_violations": violations
     }
 
-    with open(output_file, "w") as f:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
 
     print("✅ Policy-aware RAG reasoning completed")
@@ -185,11 +205,11 @@ def run_policy_rag(
 
 
 # ==================================================
-# OPTIONAL: STANDALONE TESTING
+# OPTIONAL: STANDALONE TEST
 # ==================================================
 
 if __name__ == "__main__":
     run_policy_rag(
-        evidence_file="moderation_evidence.json",
-        output_file="policy_violations_output.json"
+        evidence_file=Path("output") / "moderation_evidence.json",
+        output_file=Path("output") / "policy_violations_output.json"
     )
