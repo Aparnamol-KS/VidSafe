@@ -91,7 +91,7 @@ OUTPUT:
 # LOCAL TEST (OPTIONAL)
 # -------------------------------------------------
 if __name__ == "__main__":
-    with open("data/raw_policy_output.json", "r") as f:
+    with open("policy_data/raw_policy_output.json", "r") as f:
         raw_output = json.load(f)
 
     policy_report = reduce_policy_violations_to_text(raw_output)
@@ -99,5 +99,5 @@ if __name__ == "__main__":
     print("\n=== POLICY REPORT ===\n")
     print(policy_report)
 
-    with open("data/policy_report.txt", "w", encoding="utf-8") as f:
+    with open("policy_data/policy_report.txt", "w", encoding="utf-8") as f:
         f.write(policy_report)
