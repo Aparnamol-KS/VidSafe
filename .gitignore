@@ -50,3 +50,6 @@ output/*
 *.pt
 *.faiss
 *.json
+
+!raw_policy_output.json
+!reduced_policy_output.json
