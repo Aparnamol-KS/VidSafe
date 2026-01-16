@@ -15,7 +15,6 @@ if not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY not found in environment variables")
 
 MODEL_NAME = "llama-3.3-70b-versatile"
-
 client = Groq(api_key=GROQ_API_KEY)
 
 
@@ -29,6 +28,8 @@ def compress_policy_output(
     """
     Compress frame-level moderation output into
     policy-level summaries BEFORE sending to LLM.
+
+    Robust to missing fields (category, timestamp, reason).
     """
 
     grouped = defaultdict(lambda: {
@@ -39,20 +40,30 @@ def compress_policy_output(
     })
 
     for v in raw_policy_output.get("policy_violations", []):
-        key = f"{v['policy_name']}|{v['category']}"
+        # ---- SAFE FIELD ACCESS ----
+        policy_name = v.get("policy_name", "Unknown Policy")
+        category = v.get("category", "Uncategorized")
+        severity = v.get("severity", "Medium")
+        timestamp = v.get("timestamp", "N/A")
+        reason = v.get("reason", "Policy violation detected")
 
-        grouped[key]["policy_name"] = v["policy_name"]
-        grouped[key]["category"] = v["category"]
-        grouped[key]["severity"] = v["severity"]
+        key = f"{policy_name}|{category}"
+
+        grouped[key]["policy_name"] = policy_name
+        grouped[key]["category"] = category
+        grouped[key]["severity"] = severity
 
         if len(grouped[key]["timestamps"]) < max_timestamps_per_policy:
             grouped[key]["timestamps"].append({
-                "timestamp": v["timestamp"],
-                "reason": v["reason"]
+                "timestamp": timestamp,
+                "reason": reason
             })
 
     return {
-        "video_id": raw_policy_output.get("video_id"),
+        "video_id": raw_policy_output.get("video_id", "unknown"),
+        "fusion_severity": raw_policy_output.get("fusion_severity", "Medium"),
+        "video_max_confidence": raw_policy_output.get("video_max_confidence"),
+        "audio_max_confidence": raw_policy_output.get("audio_max_confidence"),
         "total_policies": len(grouped),
         "policies": list(grouped.values())
     }
@@ -68,6 +79,7 @@ def reduce_policy_violations_to_text(raw_policy_output: dict) -> str:
     """
 
     compressed_output = compress_policy_output(raw_policy_output)
+
     prompt = f"""
 You are a senior content moderation analyst for a video safety platform.
 
@@ -94,8 +106,12 @@ REQUIRED MARKDOWN STRUCTURE
 
 ## Video Overview
 - **Total Policies Violated:** <number>
-- **Overall Severity Level:** <Low / Medium / High>
-- **Recommended Action:** <Allow / Age-Restrict / Limited Distribution / Remove>
+- **Overall Fusion Severity Level:** <Low / Medium / High / Critical>
+- **Recommended Action (Based on Fusion Severity):**
+  - Critical → Remove Content
+  - High → Age Restrict
+  - Medium → Limited Distribution
+  - Low → Allow
 
 ## Policy Violations Summary
 
@@ -103,7 +119,6 @@ REQUIRED MARKDOWN STRUCTURE
 - **Severity:** <Low / Medium / High>
 - **Description:** <one-line description>
 - **Representative Affected Timestamps:**
-  - <start> – <end>: <short explanation>
   - <start> – <end>: <short explanation>
 
 ## Age Restriction Assessment
@@ -121,7 +136,6 @@ COMPRESSED INPUT (JSON)
 
 FINAL REPORT:
 """
-
 
     response = client.chat.completions.create(
         model=MODEL_NAME,
@@ -146,24 +160,33 @@ FINAL REPORT:
 
 
 # -------------------------------------------------
-# LOCAL TEST (OPTIONAL)
+# LOCAL TEST (SAFE)
 # -------------------------------------------------
 if __name__ == "__main__":
-    with open(
-        "policy_data/raw_policy_output.json",
-        "r",
-        encoding="utf-8"
-    ) as f:
-        raw_output = json.load(f)
+    dummy_policy = {
+        "video_id": "test_video",
+        "fusion_severity": "High",
+        "video_max_confidence": 0.68,
+        "audio_max_confidence": 0.75,
+        "policy_violations": [
+            {
+                "policy_name": "Violence and Graphic Content",
+                "category": "Violence",
+                "severity": "Medium",
+                "modality": "video",
+                "timestamp": "0:00:02 - 0:00:04",
+                "reason": "Physical aggression detected"
+            },
+            {
+                "policy_name": "Harassment and Threats",
+                "category": "Abuse",
+                "severity": "High",
+                "modality": "audio",
+                "timestamp": "0:00:06 - 0:00:08",
+                "reason": "Threatening speech detected"
+            }
+        ]
+    }
 
-    policy_report = reduce_policy_violations_to_text(raw_output)
-
-    print("\n=== CONTENT MODERATION REPORT ===\n")
-    print(policy_report)
-
-    with open(
-        "policy_data/policy_report.txt",
-        "w",
-        encoding="utf-8"
-    ) as f:
-        f.write(policy_report)
+    print("\n=== COMPRESSED POLICY OUTPUT ===\n")
+    print(json.dumps(compress_policy_output(dummy_policy), indent=2))

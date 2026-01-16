@@ -129,11 +129,15 @@ if uploaded_video and not st.session_state.analysis_done:
                     "detected_categories": list(
                         {v["category"] for v in raw_policy_output.get("policy_violations", [])}
                     ),
-                    "severity_level": raw_policy_output.get("overall_severity", "Medium"),
-                    "policy_decision": raw_policy_output.get(
-                        "final_decision",
-                        "Content review recommended"
+                    "severity_level": raw_policy_output.get("fusion_severity", "Medium"),
+                    "policy_decision": (
+                        "Remove Content"
+                        if raw_policy_output.get("fusion_severity") == "Critical"
+                        else "Age Restrict"
+                        if raw_policy_output.get("fusion_severity") == "High"
+                        else "Content Review Recommended"
                     ),
+
                     "flagged_segments": raw_policy_output.get("policy_violations", []),
                     "explanation": policy_report
                 }
@@ -141,8 +145,20 @@ if uploaded_video and not st.session_state.analysis_done:
                 st.session_state.pdf_bytes = generate_policy_pdf_bytes(pdf_payload)
                 st.session_state.video_ready = True
                 st.session_state.analysis_done = True
+        
 
             st.success("Analysis completed successfully ✔")
+        if st.session_state.raw_policy_json:
+            with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
+                raw_policy_output = json.load(f)
+
+            st.markdown("#### Overall Fusion Severity")
+            st.metric(
+                label="Fusion Severity",
+                value=raw_policy_output.get("fusion_severity", "Unknown")
+            )
+
+
 
 
 # -------------------------------------------------
