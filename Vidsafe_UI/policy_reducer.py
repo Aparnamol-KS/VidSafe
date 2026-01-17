@@ -94,7 +94,7 @@ IMPORTANT INTERPRETATION RULES:
 REQUIRED MARKDOWN STRUCTURE
 ---------------------------------------------------------------
 
-# Content Moderation Summary Report
+# Safety Assessment Report
 
 ## Video Overview
 - **Total Policy Groups Violated:** <number>

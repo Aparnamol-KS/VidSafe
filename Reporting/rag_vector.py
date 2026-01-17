@@ -172,7 +172,7 @@ def run_policy_rag(evidence_file, output_file):
                 "severity": determine_severity(conf),
                 "confidence": conf,
                 "timestamp": sec_to_timestamp(time_sec),
-                "reason": "Detected violent visual activity (RT-DETR)"
+                "reason": "Visual analysis identified violent physical activity"
             })
 
     # ==================================================

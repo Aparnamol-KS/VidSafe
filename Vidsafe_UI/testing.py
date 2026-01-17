@@ -1,57 +1,64 @@
+import json
+from pathlib import Path
+
 from policy_reducer import reduce_policy_violations_to_text
 from pdf_utils import generate_policy_pdf_bytes
 
 
-# -----------------------------------------
-# Step 1: Generate markdown report via LLM
-# -----------------------------------------
-report_markdown = reduce_policy_violations_to_text({
-    "video_id": "test_video",
-    "fusion_severity": "High",
-    "video_max_confidence": 0.68,
-    "audio_max_confidence": 0.75,
-    "policy_violations": [
-        {
-            "policy_name": "Violence and Graphic Content",
-            "category": "Violence",
-            "severity": "Medium",
-            "modality": "video",
-            "timestamp": "0:00:02 - 0:00:04",
-            "reason": "Physical aggression detected"
-        },
-        {
-            "policy_name": "Harassment and Threats",
-            "category": "Abuse",
-            "severity": "High",
-            "modality": "audio",
-            "timestamp": "0:00:06 - 0:00:08",
-            "reason": "Threatening speech detected"
-        }
-    ]
-})
-
-print("\n=== MARKDOWN REPORT ===\n")
-print(report_markdown)
+# -------------------------------------------------
+# CONFIG: paths to REAL pipeline outputs
+# -------------------------------------------------
+POLICY_OUTPUT_FILE = Path("outputs/policy_violations_output.json")
+PDF_OUTPUT_FILE = Path("test_report.pdf")
 
 
-# -----------------------------------------
-# Step 2: Wrap markdown for PDF generator
-# -----------------------------------------
+# -------------------------------------------------
+# STEP 1: Load real policy violations output
+# -------------------------------------------------
+if not POLICY_OUTPUT_FILE.exists():
+    raise FileNotFoundError(
+        f"Policy output not found: {POLICY_OUTPUT_FILE}"
+    )
+
+with open(POLICY_OUTPUT_FILE, "r", encoding="utf-8") as f:
+    raw_policy_output = json.load(f)
+
+print("✅ Loaded policy violations output")
+print(f"• Video ID: {raw_policy_output.get('video_id')}")
+print(f"• Total violations: {raw_policy_output.get('total_violations')}")
+print(f"• Fusion severity: {raw_policy_output.get('fusion_severity')}")
+
+
+# -------------------------------------------------
+# STEP 2: Generate markdown moderation report (LLM)
+# -------------------------------------------------
+print("\n🧠 Generating moderation report via policy reducer...")
+
+report_markdown = reduce_policy_violations_to_text(raw_policy_output)
+
+print("\n=== MARKDOWN REPORT (PREVIEW) ===\n")
+print(report_markdown[:1200])  # preview only
+
+
+# -------------------------------------------------
+# STEP 3: Wrap for PDF generator
+# -------------------------------------------------
 rag_data = {
     "explanation": report_markdown
 }
 
 
-# -----------------------------------------
-# Step 3: Generate PDF bytes
-# -----------------------------------------
+# -------------------------------------------------
+# STEP 4: Generate PDF bytes
+# -------------------------------------------------
+print("\n📄 Generating PDF...")
 pdf_bytes = generate_policy_pdf_bytes(rag_data)
 
 
-# -----------------------------------------
-# Step 4: Save PDF to disk
-# -----------------------------------------
-with open("test_report.pdf", "wb") as f:
+# -------------------------------------------------
+# STEP 5: Save PDF
+# -------------------------------------------------
+with open(PDF_OUTPUT_FILE, "wb") as f:
     f.write(pdf_bytes)
 
-print("\n✅ PDF generated successfully → test_report.pdf")
+print(f"\n✅ PDF generated successfully → {PDF_OUTPUT_FILE.resolve()}")
