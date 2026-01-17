@@ -3,6 +3,8 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
+import time
+
 
 import sys
 
@@ -92,37 +94,68 @@ if uploaded_video and not st.session_state.analysis_done:
         st.write(f"**Size:** {uploaded_video.size / (1024 * 1024):.2f} MB")
 
         if st.button("▶ Start Analysis", use_container_width=True):
-            with st.spinner("Analyzing video and generating moderation report..."):
+            with st.status(
+                "🚀 Running VidSafe moderation pipeline...",
+                expanded=True
+            ) as status:
 
-                # Save uploaded video
+                progress = st.progress(0)
+
+                # -------------------------------------------------
+                # SAVE VIDEO
+                # -------------------------------------------------
+                status.write("📥 Saving uploaded video")
                 with open(INPUT_VIDEO, "wb") as f:
                     f.write(uploaded_video.read())
+                progress.progress(5)
 
                 # -------------------------------------------------
-                # RUN REAL VIDSAFE PIPELINE
+                # VIDEO ANALYSIS
                 # -------------------------------------------------
+                status.write("🎥 Processing video for visual violence detection")
+                status.write("• CLIP-based violent segment filtering")
+                status.write("• RT-DETR violent region detection & blurring")
+                progress.progress(30)
+
                 input_path = Path(INPUT_VIDEO).resolve()
                 results = pipeline.run(input_path)
 
+                progress.progress(55)
+
+                # -------------------------------------------------
+                # LOAD POLICY OUTPUT
+                # -------------------------------------------------
+                status.write("📜 Mapping detected content to platform policies")
+                status.write("• Multimodal reasoning (Video + Audio)")
+                status.write("• Confidence-based severity estimation")
 
                 st.session_state.output_video = str(results["final_video"])
                 st.session_state.raw_policy_json = str(results["policy_report"])
 
-                # -------------------------------------------------
-                # LOAD RAW POLICY OUTPUT
-                # -------------------------------------------------
                 with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
                     raw_policy_output = json.load(f)
+
+                progress.progress(70)
 
                 # -------------------------------------------------
                 # POLICY REDUCTION (LLM)
                 # -------------------------------------------------
+                status.write("🧠 Reducing policy violations into a human-readable report")
+                status.write("• Token-safe compression")
+                status.write("• Professional moderation summary")
+
                 policy_report = reduce_policy_violations_to_text(raw_policy_output)
                 st.session_state.policy_report = policy_report
+
+                progress.progress(85)
 
                 # -------------------------------------------------
                 # PDF GENERATION
                 # -------------------------------------------------
+                status.write("📄 Generating downloadable PDF report")
+                status.write("• Structured Markdown rendering")
+                status.write("• Compliance-ready layout")
+
                 pdf_payload = {
                     "video_name": uploaded_video.name,
                     "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -137,14 +170,25 @@ if uploaded_video and not st.session_state.analysis_done:
                         if raw_policy_output.get("fusion_severity") == "High"
                         else "Content Review Recommended"
                     ),
-
                     "flagged_segments": raw_policy_output.get("policy_violations", []),
                     "explanation": policy_report
                 }
 
                 st.session_state.pdf_bytes = generate_policy_pdf_bytes(pdf_payload)
+
+                progress.progress(100)
+
+                # -------------------------------------------------
+                # FINALIZE
+                # -------------------------------------------------
                 st.session_state.video_ready = True
                 st.session_state.analysis_done = True
+
+                status.update(
+                    label="✅ Moderation completed successfully",
+                    state="complete"
+                )
+
         
 
             st.success("Analysis completed successfully ✔")

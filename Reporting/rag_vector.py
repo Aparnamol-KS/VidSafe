@@ -173,17 +173,22 @@ def run_policy_rag(
 
 
     # ==================================================
-    # VIDEO VIOLENCE REASONING
+    # VIDEO VIOLENCE REASONING (RT-DETR BASED)
     # ==================================================
-    for idx, segment in enumerate(violent_segments, 1):
-        start = segment["start"]
-        end = segment["end"]
-        confidence = segment.get("confidence", 0.0)
+
+    rtdetr_detections = evidence.get("rtdetr_detections", [])
+
+    print(f"🎯 RT-DETR detections: {len(rtdetr_detections)}")
+
+    for idx, det in enumerate(rtdetr_detections, 1):
+        confidence = det.get("confidence", 0.0)
+        time_sec = det.get("time", 0.0)
+
         video_confidences.append(confidence)
 
         print(
-            f"\n🎥 [VIDEO] Segment {idx}: "
-            f"{sec_to_timestamp(start)} → {sec_to_timestamp(end)} | "
+            f"\n🎥 [VIDEO] Detection {idx}: "
+            f"t={sec_to_timestamp(time_sec)} | "
             f"confidence={confidence:.2f}"
         )
 
@@ -191,7 +196,10 @@ def run_policy_rag(
             print("   ⛔ Below policy threshold → ignored")
             continue
 
-        query = f"violent physical activity in a video with confidence {confidence}"
+        query = (
+            f"violent physical activity detected visually "
+            f"with confidence {confidence}"
+        )
 
         query_embedding = embedder.encode([query]).astype("float32")
         _, results = index.search(query_embedding, k=3)
@@ -212,12 +220,10 @@ def run_policy_rag(
                 "category": policy["category"],
                 "severity": severity,
                 "confidence": confidence,
-                "timestamp": (
-                    f"{sec_to_timestamp(start)} - "
-                    f"{sec_to_timestamp(end)}"
-                ),
-                "reason": "Detected violent visual content"
+                "timestamp": sec_to_timestamp(time_sec),
+                "reason": "Detected violent visual content (RT-DETR)"
             })
+
 
     # ==================================================
     # AUDIO TOXICITY / THREAT REASONING
