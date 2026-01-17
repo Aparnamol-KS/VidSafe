@@ -58,3 +58,5 @@ output_blurred.mp4
 *.mp4
 
 *.pdf
+
+!youtube_multimodal_policies.json

@@ -1,0 +1,160 @@
+[
+  {
+    "policy_id": "YT-VIO-001",
+    "policy_name": "Violence and Graphic Content",
+    "category": "Violence",
+    "applies_to": ["video", "audio"],
+    "description": "Content depicting or describing physical violence, injury, bloodshed, or use of weapons that may shock, harm, or distress viewers.",
+    "examples": [
+      "Physical fights or assaults",
+      "Use of weapons",
+      "Blood or visible injury",
+      "Verbal descriptions of violent acts"
+    ],
+    "severity_guidelines": {
+      "high": [
+        "Weapon use",
+        "Severe injury or bloodshed",
+        "Explicit threats of killing"
+      ],
+      "medium": [
+        "Physical fighting",
+        "Non-graphic violence",
+        "Aggressive verbal descriptions"
+      ]
+    }
+  },
+
+  {
+    "policy_id": "YT-CHILD-002",
+    "policy_name": "Child Safety",
+    "category": "Child Protection",
+    "applies_to": ["video", "audio"],
+    "description": "Content involving minors must not include violence, abuse, threats, or situations that could frighten or traumatize children.",
+    "examples": [
+      "Violence involving minors",
+      "Threatening language directed at children",
+      "Disturbing or frightening scenarios involving minors"
+    ],
+    "severity_guidelines": {
+      "high": [
+        "Violence or abuse involving minors",
+        "Threats directed at children"
+      ],
+      "medium": [
+        "Frightening content involving minors"
+      ]
+    }
+  },
+
+  {
+    "policy_id": "YT-KIDS-003",
+    "policy_name": "YouTube Kids Content Policy",
+    "category": "Kids Content",
+    "applies_to": ["video", "audio"],
+    "description": "Violent, aggressive, or frightening content is not allowed in videos intended for children, including animated or verbal violence.",
+    "examples": [
+      "Cartoon violence",
+      "Aggressive shouting",
+      "Threatening dialogue in kids content"
+    ],
+    "severity_guidelines": {
+      "high": [
+        "Violence presented in children's content"
+      ],
+      "medium": [
+        "Aggressive or frightening language"
+      ]
+    }
+  },
+
+  {
+    "policy_id": "YT-DANG-004",
+    "policy_name": "Dangerous Acts",
+    "category": "Physical Harm",
+    "applies_to": ["video"],
+    "description": "Content depicting dangerous or violent behavior that could inspire viewers to imitate harmful acts.",
+    "examples": [
+      "Weapon handling",
+      "Explosions",
+      "Dangerous stunts",
+      "Assault demonstrations"
+    ],
+    "severity_guidelines": {
+      "high": [
+        "Weapon demonstrations",
+        "Explosions",
+        "Severe physical harm"
+      ],
+      "medium": [
+        "Risky stunts"
+      ]
+    }
+  },
+
+  {
+    "policy_id": "YT-HAR-005",
+    "policy_name": "Harassment and Threats",
+    "category": "Abuse",
+    "applies_to": ["audio", "video"],
+    "description": "Content that includes harassment, intimidation, or violent threats toward individuals or groups.",
+    "examples": [
+      "Threatening speech",
+      "Verbal abuse",
+      "Intimidation or coercion"
+    ],
+    "severity_guidelines": {
+      "high": [
+        "Explicit violent threats",
+        "Threats of killing or serious harm"
+      ],
+      "medium": [
+        "Harassment",
+        "Aggressive or abusive language"
+      ]
+    }
+  },
+
+  {
+    "policy_id": "YT-AGE-006",
+    "policy_name": "Age-Restricted Content",
+    "category": "Age Restriction",
+    "applies_to": ["video", "audio"],
+    "description": "Content containing non-graphic violence or aggressive language that may be unsuitable for children but acceptable with age restrictions.",
+    "examples": [
+      "Non-graphic fights",
+      "Mild verbal aggression"
+    ],
+    "severity_guidelines": {
+      "medium": [
+        "Non-graphic violence",
+        "Mild threats"
+      ],
+      "low": [
+        "Contextual aggression"
+      ]
+    }
+  },
+
+  {
+    "policy_id": "YT-FEAR-007",
+    "policy_name": "Frightening or Disturbing Content",
+    "category": "Psychological Harm",
+    "applies_to": ["audio", "video"],
+    "description": "Content designed to scare, disturb, or psychologically harm viewers, particularly children.",
+    "examples": [
+      "Screaming or panic voices",
+      "Terrifying dialogue",
+      "Disturbing visuals"
+    ],
+    "severity_guidelines": {
+      "high": [
+        "Terrifying content",
+        "Intense fear or panic"
+      ],
+      "medium": [
+        "Disturbing or unsettling content"
+      ]
+    }
+  }
+]

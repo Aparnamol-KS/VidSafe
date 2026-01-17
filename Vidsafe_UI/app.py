@@ -95,50 +95,26 @@ if uploaded_video and not st.session_state.analysis_done:
 
         if st.button("▶ Start Analysis", use_container_width=True):
             with st.status(
-                "Starting content safety analysis...",
+                "Processing video for safety analysis...",
                 expanded=False
-            ) as status:
+            ):
 
-                progress = st.progress(0)
-
-                # -------------------------------------------------
-                # SAVE VIDEO
-                # -------------------------------------------------
-                status.update(label="Saving uploaded video...")
+                # Save video
                 with open(INPUT_VIDEO, "wb") as f:
                     f.write(uploaded_video.read())
-                progress.progress(10)
 
-                # -------------------------------------------------
-                # AUDIO ANALYSIS
-                # -------------------------------------------------
-                status.update(label="Analyzing audio for harmful or unsafe speech...")
                 input_path = Path(INPUT_VIDEO).resolve()
+
+                # Run full pipeline (single blocking call)
                 results = pipeline.run(input_path)
-                progress.progress(40)
 
-                # -------------------------------------------------
-                # VIDEO ANALYSIS
-                # -------------------------------------------------
-                status.update(label="Analyzing video frames for violent or unsafe visuals...")
-                progress.progress(65)
-
-                # -------------------------------------------------
-                # POLICY MAPPING
-                # -------------------------------------------------
-                status.update(label="Checking detected content against platform safety rules...")
                 st.session_state.output_video = str(results["final_video"])
                 st.session_state.raw_policy_json = str(results["policy_report"])
 
                 with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
                     raw_policy_output = json.load(f)
 
-                progress.progress(80)
-
-                # -------------------------------------------------
-                # REPORT GENERATION (RAG)
-                # -------------------------------------------------
-                status.update(label="Generating moderation report...")
+                # Generate report
                 policy_report = reduce_policy_violations_to_text(raw_policy_output)
                 st.session_state.policy_report = policy_report
 
@@ -161,19 +137,11 @@ if uploaded_video and not st.session_state.analysis_done:
                 }
 
                 st.session_state.pdf_bytes = generate_policy_pdf_bytes(pdf_payload)
-
-                progress.progress(100)
-
-                # -------------------------------------------------
-                # FINALIZE
-                # -------------------------------------------------
                 st.session_state.video_ready = True
                 st.session_state.analysis_done = True
 
-                status.update(
-                    label="Moderation completed successfully.",
-                    state="complete"
-                )
+            st.success("Video analysis completed successfully.")
+
 
         if st.session_state.raw_policy_json:
             with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
