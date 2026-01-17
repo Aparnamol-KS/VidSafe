@@ -70,6 +70,9 @@ class VidSafePipeline:
 
         violent_segments = vision_results.get("violent_segments", [])
 
+        rtdetr_detections = vision_results.get("rtdetr_detections",[])
+        
+
         # ==================================================
         # 3. MERGE AUDIO + VIDEO
         # ==================================================
@@ -89,9 +92,17 @@ class VidSafePipeline:
         evidence = {
             "video_id": input_video.stem,
             "final_video": str(self.final_video),
+
+            # CLIP timestamps
             "violent_segments": violent_segments,
+
+            # RT-DETR truth signal
+            "rtdetr_detections": rtdetr_detections,
+
+            # Audio
             "audio_violations": audio_violations
         }
+
 
         with open(self.evidence_file, "w", encoding="utf-8") as f:
             json.dump(evidence, f, indent=2)

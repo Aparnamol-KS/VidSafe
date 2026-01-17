@@ -4,59 +4,57 @@ from collections import defaultdict
 from groq import Groq
 from dotenv import load_dotenv
 
-
 # -------------------------------------------------
-# LOAD ENVIRONMENT VARIABLES
+# ENV
 # -------------------------------------------------
 load_dotenv()
-
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY not found in environment variables")
+    raise RuntimeError("GROQ_API_KEY not found")
 
 MODEL_NAME = "llama-3.3-70b-versatile"
 client = Groq(api_key=GROQ_API_KEY)
 
-
 # -------------------------------------------------
-# PRE-COMPRESSION (CRITICAL FOR TOKEN SAFETY)
+# POLICY COMPRESSION (MODALITY-AWARE)
 # -------------------------------------------------
 def compress_policy_output(
     raw_policy_output: dict,
     max_timestamps_per_policy: int = 5
 ) -> dict:
     """
-    Compress frame-level moderation output into
-    policy-level summaries BEFORE sending to LLM.
-
-    Robust to missing fields (category, timestamp, reason).
+    Compress violations while preserving
+    VIDEO vs AUDIO meaning clearly.
     """
 
     grouped = defaultdict(lambda: {
         "policy_name": "",
         "category": "",
+        "modality": "",
         "severity": "",
         "timestamps": []
     })
 
     for v in raw_policy_output.get("policy_violations", []):
-        # ---- SAFE FIELD ACCESS ----
         policy_name = v.get("policy_name", "Unknown Policy")
         category = v.get("category", "Uncategorized")
+        modality = v.get("modality", "unknown").upper()
         severity = v.get("severity", "Medium")
         timestamp = v.get("timestamp", "N/A")
         reason = v.get("reason", "Policy violation detected")
 
-        key = f"{policy_name}|{category}"
+        # ---- KEY CHANGE: MODALITY INCLUDED ----
+        key = f"{policy_name}|{category}|{modality}"
 
         grouped[key]["policy_name"] = policy_name
         grouped[key]["category"] = category
+        grouped[key]["modality"] = modality
         grouped[key]["severity"] = severity
 
         if len(grouped[key]["timestamps"]) < max_timestamps_per_policy:
             grouped[key]["timestamps"].append({
                 "timestamp": timestamp,
-                "reason": reason
+                "reason": f"[{modality}] {reason}"
             })
 
     return {
@@ -64,50 +62,44 @@ def compress_policy_output(
         "fusion_severity": raw_policy_output.get("fusion_severity", "Medium"),
         "video_max_confidence": raw_policy_output.get("video_max_confidence"),
         "audio_max_confidence": raw_policy_output.get("audio_max_confidence"),
-        "total_policies": len(grouped),
+        "total_policy_groups": len(grouped),
         "policies": list(grouped.values())
     }
 
-
 # -------------------------------------------------
-# LLM-BASED POLICY REDUCTION & REORDERING
+# LLM REPORT GENERATION
 # -------------------------------------------------
 def reduce_policy_violations_to_text(raw_policy_output: dict) -> str:
     """
-    Uses Groq LLM to generate a professional moderation report
-    from compressed policy-level data (token-safe).
+    Generate a professional moderation report
+    that clearly distinguishes visual violence
+    from audio-based toxicity.
     """
 
     compressed_output = compress_policy_output(raw_policy_output)
 
     prompt = f"""
-You are a senior content moderation analyst for a video safety platform.
+You are a senior content moderation analyst.
 
-You are given a COMPRESSED JSON summary of video policy violations.
-Each policy already contains representative timestamps.
+You are given a COMPRESSED JSON summary of violations detected
+from BOTH video frames and audio speech.
 
-Your task is to generate a PROFESSIONAL MODERATION REPORT
-using **MARKDOWN STRUCTURE** suitable for rendering into a PDF.
+IMPORTANT INTERPRETATION RULES:
+- VIDEO violations represent physical or visual violence
+- AUDIO violations represent spoken threats, abuse, or toxic language
+- Visual violence must be clearly highlighted as physical harm
+- Audio toxicity must be treated as secondary if visual violence exists
 
-----------------------------------------------------------------
-OUTPUT FORMAT RULES (STRICT)
-----------------------------------------------------------------
-- Use MARKDOWN headings (#, ##, ###)
-- Use bullet points (-)
-- Do NOT use separators like ----
-- Do NOT output JSON
-- Keep language formal and audit-ready
-
-----------------------------------------------------------------
+---------------------------------------------------------------
 REQUIRED MARKDOWN STRUCTURE
-----------------------------------------------------------------
+---------------------------------------------------------------
 
 # Content Moderation Summary Report
 
 ## Video Overview
-- **Total Policies Violated:** <number>
+- **Total Policy Groups Violated:** <number>
 - **Overall Fusion Severity Level:** <Low / Medium / High / Critical>
-- **Recommended Action (Based on Fusion Severity):**
+- **Recommended Action:**
   - Critical → Remove Content
   - High → Age Restrict
   - Medium → Limited Distribution
@@ -115,23 +107,26 @@ REQUIRED MARKDOWN STRUCTURE
 
 ## Policy Violations Summary
 
-### <Policy Name> (<Category>)
+### <Policy Name> (<Category>) – <VIDEO / AUDIO>
 - **Severity:** <Low / Medium / High>
-- **Description:** <one-line description>
+- **Description:** Clear explanation of why this policy is violated
 - **Representative Affected Timestamps:**
-  - <start> – <end>: <short explanation>
+  - <timestamp>: <explanation>
 
 ## Age Restriction Assessment
 - **Age Restriction Required:** <Yes / No>
-- **Justification:** <professional justification>
+- **Justification:** Professional explanation
 
 ## Overall Risk Assessment
-<One concise paragraph covering:
-nature of content, recurrence, viewer impact, platform safety>
+Summarize:
+- presence of sustained physical violence
+- recurrence of harmful speech
+- potential harm to viewers
+- platform safety implications
 
-----------------------------------------------------------------
-COMPRESSED INPUT (JSON)
-----------------------------------------------------------------
+---------------------------------------------------------------
+COMPRESSED INPUT
+---------------------------------------------------------------
 {json.dumps(compressed_output, indent=2)}
 
 FINAL REPORT:
@@ -143,8 +138,8 @@ FINAL REPORT:
             {
                 "role": "system",
                 "content": (
-                    "You generate professional, structured content moderation "
-                    "reports suitable for compliance and audit review."
+                    "You generate professional, compliance-ready "
+                    "content moderation reports."
                 )
             },
             {
@@ -153,40 +148,16 @@ FINAL REPORT:
             }
         ],
         temperature=0.1,
-        max_tokens=600
+        max_tokens=700
     )
 
     return response.choices[0].message.content.strip()
 
-
 # -------------------------------------------------
-# LOCAL TEST (SAFE)
+# LOCAL TEST
 # -------------------------------------------------
 if __name__ == "__main__":
-    dummy_policy = {
-        "video_id": "test_video",
-        "fusion_severity": "High",
-        "video_max_confidence": 0.68,
-        "audio_max_confidence": 0.75,
-        "policy_violations": [
-            {
-                "policy_name": "Violence and Graphic Content",
-                "category": "Violence",
-                "severity": "Medium",
-                "modality": "video",
-                "timestamp": "0:00:02 - 0:00:04",
-                "reason": "Physical aggression detected"
-            },
-            {
-                "policy_name": "Harassment and Threats",
-                "category": "Abuse",
-                "severity": "High",
-                "modality": "audio",
-                "timestamp": "0:00:06 - 0:00:08",
-                "reason": "Threatening speech detected"
-            }
-        ]
-    }
+    with open("policy_violations_output.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    print("\n=== COMPRESSED POLICY OUTPUT ===\n")
-    print(json.dumps(compress_policy_output(dummy_policy), indent=2))
+    print(reduce_policy_violations_to_text(data))
