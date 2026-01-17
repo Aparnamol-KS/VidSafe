@@ -1,40 +1,47 @@
 import streamlit as st
 import os
 import json
-import shutil
 from datetime import datetime
+from pathlib import Path
+import time
 
+
+import sys
+
+# Add project root to Python path
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
+
+
+from core.pipeline import VidSafePipeline
 from pdf_utils import generate_policy_pdf_bytes
 from policy_reducer import reduce_policy_violations_to_text
 
-# -------------------------------------------------
-# CONFIG (UPLOAD SIZE MUST BE SET BEFORE RUN)
-# -------------------------------------------------
-# IMPORTANT (Windows PowerShell):
-# $env:STREAMLIT_SERVER_MAX_UPLOAD_SIZE=1024
-# streamlit run app.py
 
+# -------------------------------------------------
+# CONFIG
+# -------------------------------------------------
 INPUT_VIDEO = "input_video.mp4"
 OUTPUT_DIR = "outputs"
-OUTPUT_VIDEO = os.path.join(OUTPUT_DIR, "processed_video.mp4")
-RAW_POLICY_JSON = os.path.join(OUTPUT_DIR, "raw_policy_output.json")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# -------------------------------------------------
-# SESSION STATE
-# -------------------------------------------------
-if "policy_report" not in st.session_state:
-    st.session_state.policy_report = None
+pipeline = VidSafePipeline(output_dir=Path(OUTPUT_DIR))
 
-if "pdf_bytes" not in st.session_state:
-    st.session_state.pdf_bytes = None
-
-if "video_ready" not in st.session_state:
-    st.session_state.video_ready = False
 
 # -------------------------------------------------
-# PAGE SETUP
+# SESSION STATE INITIALIZATION
+# -------------------------------------------------
+st.session_state.setdefault("policy_report", None)
+st.session_state.setdefault("pdf_bytes", None)
+st.session_state.setdefault("video_ready", False)
+st.session_state.setdefault("analysis_done", False)
+st.session_state.setdefault("output_video", None)
+st.session_state.setdefault("raw_policy_json", None)
+
+
+# -------------------------------------------------
+# PAGE CONFIG
 # -------------------------------------------------
 st.set_page_config(
     page_title="VidSafe – Video Safety Platform",
@@ -42,32 +49,25 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # -------------------------------------------------
 # HEADER
 # -------------------------------------------------
 st.markdown(
     """
     <div style="text-align:center; margin-top:10px;">
-        <h1 style="
-            font-size:72px;
-            font-weight:800;
-            letter-spacing:1px;
-            margin-bottom:5px;
-        ">
+        <h1 style="font-size:72px; font-weight:800; margin-bottom:5px;">
             VidSafe
         </h1>
-        <p style="
-            font-size:20px;
-            color:#6b7280;
-            margin-top:0;
-        ">
+        <p style="font-size:20px; color:#6b7280;">
             Automated Video Safety Analysis & Policy Enforcement Platform
         </p>
     </div>
-    <hr style="margin-top:20px;">
+    <hr>
     """,
     unsafe_allow_html=True
 )
+
 
 # -------------------------------------------------
 # UPLOAD SECTION
@@ -79,85 +79,82 @@ uploaded_video = st.file_uploader(
     type=["mp4", "avi", "mov"]
 )
 
-if uploaded_video:
-    col1, spacer, col2 = st.columns([1.2, 0.15, 1])
+if uploaded_video and not st.session_state.analysis_done:
+    col1, col2 = st.columns([1.2, 1])
 
-    # -------- LEFT: VIDEO PREVIEW --------
+    # -------- INPUT VIDEO PREVIEW --------
     with col1:
-        st.markdown("**Input Video Preview**")
+        st.markdown("### Input Video Preview")
         st.video(uploaded_video)
 
-    # Save uploaded file
-    with open(INPUT_VIDEO, "wb") as f:
-        f.write(uploaded_video.read())
-
-    # -------- RIGHT: VIDEO DETAILS --------
+    # -------- VIDEO DETAILS + ACTION --------
     with col2:
-        st.markdown("**Video Details**")
+        st.markdown("### Video Details")
         st.write(f"**Filename:** {uploaded_video.name}")
         st.write(f"**Size:** {uploaded_video.size / (1024 * 1024):.2f} MB")
 
         if st.button("▶ Start Analysis", use_container_width=True):
-            with st.spinner("Analyzing video content and generating policy assessment..."):
+            with st.status(
+                "Processing video for safety analysis...",
+                expanded=False
+            ):
 
-                # -------------------------------------------------
-                # (1) DUMMY VIDEO PROCESSING
-                # Replace with your real pipeline later
-                # -------------------------------------------------
-                shutil.copy(INPUT_VIDEO, OUTPUT_VIDEO)
+                # Save video
+                with open(INPUT_VIDEO, "wb") as f:
+                    f.write(uploaded_video.read())
 
-                # -------------------------------------------------
-                # (2) RAW POLICY OUTPUT (SIMULATED)
-                # -------------------------------------------------
-                raw_policy_output = {
-                    "video_id": "vid1",
-                    "total_violations": 1440,
-                    "policy_violations": [
-                        {
-                            "policy_id": "YT-VIO-001",
-                            "policy_name": "Violence and Graphic Content",
-                            "category": "Violence",
-                            "severity": "Medium",
-                            "timestamp": "0:00:01.87 - 0:00:01.90",
-                            "reason": "Physical aggression detected"
-                        },
-                        {
-                            "policy_id": "YT-AGE-006",
-                            "policy_name": "Age-Restricted Content",
-                            "category": "Age Restriction",
-                            "severity": "Medium",
-                            "timestamp": "0:03:42.10 - 0:03:45.00",
-                            "reason": "Content unsuitable for minors"
-                        }
-                    ]
-                }
+                input_path = Path(INPUT_VIDEO).resolve()
 
-                with open(RAW_POLICY_JSON, "w", encoding="utf-8") as f:
-                    json.dump(raw_policy_output, f, indent=2)
+                # Run full pipeline (single blocking call)
+                results = pipeline.run(input_path)
 
-                # -------------------------------------------------
-                # (3) LLM REDUCTION → STRUCTURED REPORT
-                # -------------------------------------------------
+                st.session_state.output_video = str(results["final_video"])
+                st.session_state.raw_policy_json = str(results["policy_report"])
+
+                with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
+                    raw_policy_output = json.load(f)
+
+                # Generate report
                 policy_report = reduce_policy_violations_to_text(raw_policy_output)
                 st.session_state.policy_report = policy_report
 
-                # -------------------------------------------------
-                # (4) GENERATE PDF
-                # -------------------------------------------------
                 pdf_payload = {
                     "video_name": uploaded_video.name,
                     "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "detected_categories": ["Violence", "Age Restriction"],
-                    "severity_level": "Medium",
-                    "policy_decision": "Age restriction required",
-                    "flagged_segments": [],
+                    "detected_categories": list(
+                        {v["category"] for v in raw_policy_output.get("policy_violations", [])}
+                    ),
+                    "severity_level": raw_policy_output.get("fusion_severity", "Medium"),
+                    "policy_decision": (
+                        "Remove Content"
+                        if raw_policy_output.get("fusion_severity") == "Critical"
+                        else "Age Restrict"
+                        if raw_policy_output.get("fusion_severity") == "High"
+                        else "Content Review Recommended"
+                    ),
+                    "flagged_segments": raw_policy_output.get("policy_violations", []),
                     "explanation": policy_report
                 }
 
                 st.session_state.pdf_bytes = generate_policy_pdf_bytes(pdf_payload)
                 st.session_state.video_ready = True
+                st.session_state.analysis_done = True
 
-            st.success("Analysis completed successfully")
+            st.success("Video analysis completed successfully.")
+
+
+        if st.session_state.raw_policy_json:
+            with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
+                raw_policy_output = json.load(f)
+
+            st.markdown("#### Overall Fusion Severity")
+            st.metric(
+                label="Fusion Severity",
+                value=raw_policy_output.get("fusion_severity", "Unknown")
+            )
+
+
+
 
 # -------------------------------------------------
 # RESULTS SECTION
@@ -171,29 +168,44 @@ if st.session_state.video_ready:
     # -------- PROCESSED VIDEO --------
     with left:
         st.markdown("### Processed Video")
-        st.video(OUTPUT_VIDEO)
+        st.video(st.session_state.output_video)
 
-        with open(OUTPUT_VIDEO, "rb") as f:
+        with open(st.session_state.output_video, "rb") as f:
             st.download_button(
                 "⬇ Download Processed Video",
                 f.read(),
-                "vidsafe_processed_video.mp4",
-                "video/mp4",
+                file_name="vidsafe_processed_video.mp4",
+                mime="video/mp4",
                 use_container_width=True
             )
 
-    # -------- POLICY PREVIEW --------
+    # -------- POLICY REPORT --------
     with right:
         st.markdown("### Policy Assessment")
         st.markdown("#### 📝 Moderation Report")
 
-        # Preserve formatting from LLM
-        st.text(st.session_state.policy_report)
+        st.text_area(
+            label="Moderation Report",
+            value=st.session_state.policy_report,
+            height=420,
+            label_visibility="collapsed"
+        )
 
         st.download_button(
             "⬇ Download Policy Report (PDF)",
             st.session_state.pdf_bytes,
-            "vidsafe_policy_report.pdf",
-            "application/pdf",
+            file_name="vidsafe_policy_report.pdf",
+            mime="application/pdf",
             use_container_width=True
         )
+
+
+# -------------------------------------------------
+# RESET OPTION
+# -------------------------------------------------
+if st.session_state.analysis_done:
+    st.markdown("<hr>", unsafe_allow_html=True)
+    if st.button("🔄 Analyze Another Video", use_container_width=True):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.experimental_rerun()

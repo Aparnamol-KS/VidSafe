@@ -2,214 +2,257 @@
 """
 rag_vector.py
 
-- Builds Policy Vector DB (if missing)
-- Performs Policy-aware RAG reasoning
-- Path-safe & project-structure aware
+Policy-aware RAG reasoning for VidSafe
+
+- RT-DETR = visual truth
+- Audio toxicity = audio truth
+- Policies are content-based and multimodal
+- Modality-aware thresholds
+- Fusion severity support
 """
 
 import json
 from pathlib import Path
 from datetime import timedelta
 
-import numpy as np
 import faiss
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
 # ==================================================
-# BASE PATHS (CRITICAL FIX)
+# BASE PATHS
 # ==================================================
 
-BASE_DIR = Path(__file__).parent              # VidSafe/Reporting
+BASE_DIR = Path(__file__).parent
 POLICIES_DIR = BASE_DIR / "policies"
 
-DEFAULT_POLICY_FILE = POLICIES_DIR / "youtube_violence.json"
+DEFAULT_POLICY_FILE = POLICIES_DIR / "youtube_multimodal_policies.json"
 DEFAULT_FAISS_INDEX = BASE_DIR / "policy_index.faiss"
 DEFAULT_METADATA_FILE = BASE_DIR / "policy_metadata.json"
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 # ==================================================
-# UTILITY FUNCTIONS
+# THRESHOLDS (CALIBRATED)
 # ==================================================
 
-def sec_to_timestamp(seconds):
+VIDEO_POLICY_THRESHOLD = 0.40   # RT-DETR calibrated
+AUDIO_POLICY_THRESHOLD = 0.60   # Audio toxicity sharper
+
+# ==================================================
+# UTILITIES
+# ==================================================
+
+def sec_to_timestamp(seconds: float) -> str:
     return str(timedelta(seconds=float(seconds)))
 
 
-def determine_severity(detected_objects, severity_rules):
-    for obj in detected_objects:
-        if obj in severity_rules:
-            return severity_rules[obj].capitalize()
-    return "Medium"
+def determine_severity(confidence: float) -> str:
+    if confidence >= 0.7:
+        return "High"
+    elif confidence >= 0.5:
+        return "Medium"
+    else:
+        return "Low"
+
+
+def determine_fusion_severity(video_conf: float, audio_conf: float) -> str:
+    if video_conf >= 0.7 and audio_conf >= 0.7:
+        return "Critical"
+    if video_conf >= 0.7 or audio_conf >= 0.7:
+        return "High"
+    if video_conf >= 0.6 or audio_conf >= 0.6:
+        return "Medium"
+    return "Low"
 
 
 # ==================================================
-# PHASE 1: BUILD POLICY VECTOR DATABASE
+# VECTOR DB BUILD
 # ==================================================
 
-def build_policy_vector_db(
-    policy_file: Path,
-    faiss_index_file: Path,
-    metadata_file: Path
-):
-    print("🔧 Building Policy Vector Database...")
-
-    if not policy_file.exists():
-        raise FileNotFoundError(f"Policy file not found: {policy_file}")
+def build_policy_vector_db(policy_file, faiss_index_file, metadata_file):
+    print("\n🔧 Building Policy Vector DB")
 
     with open(policy_file, "r", encoding="utf-8") as f:
         policies = json.load(f)
 
-    policy_texts = []
-    policy_metadata = []
+    texts = []
+    metadata = []
 
     for p in policies:
-        policy_texts.append(
-            f"Policy: {p['policy_name']}. "
-            f"Description: {p['description']}. "
+        text = (
+            f"{p['policy_name']}. "
+            f"{p['description']}. "
             f"Category: {p['category']}. "
-            f"Relevant to child safety and kids content."
+            f"Applies to: {', '.join(p.get('applies_to', []))}."
         )
+        texts.append(text)
 
-        policy_metadata.append({
+        metadata.append({
             "policy_id": p["policy_id"],
             "policy_name": p["policy_name"],
             "category": p["category"],
-            "severity_rules": p.get("severity_rules", {})
+            "applies_to": p.get("applies_to", ["video", "audio"])
         })
 
     embedder = SentenceTransformer(EMBEDDING_MODEL)
-
     embeddings = embedder.encode(
-        policy_texts,
-        show_progress_bar=True
+        texts, show_progress_bar=True
     ).astype("float32")
 
     index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)
 
     faiss.write_index(index, str(faiss_index_file))
+    metadata_file.write_text(json.dumps(metadata, indent=2))
 
-    with open(metadata_file, "w", encoding="utf-8") as f:
-        json.dump(policy_metadata, f, indent=2)
-
-    print("✅ Policy Vector DB Created")
-    print(f"📁 FAISS index → {faiss_index_file}")
-    print(f"📁 Metadata   → {metadata_file}")
+    print("✅ Policy Vector DB ready")
 
 
 # ==================================================
-# PHASE 2: POLICY-AWARE RAG (CALLED BY main.py)
+# MAIN RAG LOGIC
 # ==================================================
 
-def run_policy_rag(
-    evidence_file,
-    output_file,
-    policy_file=DEFAULT_POLICY_FILE,
-    faiss_index_file=DEFAULT_FAISS_INDEX,
-    metadata_file=DEFAULT_METADATA_FILE
-):
-    print("🧠 Running Policy-aware RAG Reasoning...")
+def run_policy_rag(evidence_file, output_file):
+    print("\n🧠 Running Policy-aware RAG (Video + Audio)")
 
-    # -------- Normalize paths --------
-    evidence_file = Path(evidence_file)
-    output_file = Path(output_file)
-    policy_file = Path(policy_file)
-    faiss_index_file = Path(faiss_index_file)
-    metadata_file = Path(metadata_file)
+    evidence = json.loads(Path(evidence_file).read_text())
+    video_id = evidence.get("video_id", "unknown")
 
-    # -------- Build vector DB if missing --------
-    if not faiss_index_file.exists() or not metadata_file.exists():
+    rtdetr_detections = evidence.get("rtdetr_detections", [])
+    audio_violations = evidence.get("audio_violations", [])
+
+    print(f"🎥 RT-DETR detections: {len(rtdetr_detections)}")
+    print(f"🔊 Audio violations: {len(audio_violations)}")
+
+    # Build DB if missing
+    if not DEFAULT_FAISS_INDEX.exists():
         build_policy_vector_db(
-            policy_file,
-            faiss_index_file,
-            metadata_file
+            DEFAULT_POLICY_FILE,
+            DEFAULT_FAISS_INDEX,
+            DEFAULT_METADATA_FILE
         )
 
-    # -------- Sanity checks --------
-    for f in [evidence_file, faiss_index_file, metadata_file]:
-        if not f.exists():
-            raise FileNotFoundError(f"Required file missing: {f}")
-
-    # -------- Load moderation evidence --------
-    with open(evidence_file, "r", encoding="utf-8") as f:
-        evidence = json.load(f)
-
-    video_id = evidence.get("video_id", "unknown")
-    violent_segments = evidence.get("violent_segments", [])
-    detections = evidence.get("rtdetr_detections", [])
-
-    detected_objects = {d.get("object", "unknown") for d in detections}
-
-    # -------- Load vector DB --------
-    index = faiss.read_index(str(faiss_index_file))
-
-    with open(metadata_file, "r", encoding="utf-8") as f:
-        policy_metadata = json.load(f)
-
+    index = faiss.read_index(str(DEFAULT_FAISS_INDEX))
+    policy_meta = json.loads(DEFAULT_METADATA_FILE.read_text())
     embedder = SentenceTransformer(EMBEDDING_MODEL)
 
     violations = []
 
-    # -------- RAG reasoning --------
-    for segment in violent_segments:
-        start = segment["start_time"]
-        end = segment["end_time"]
+    # ==================================================
+    # VIDEO VIOLENCE (RT-DETR)
+    # ==================================================
 
-        query = (
-            f"violent content involving {', '.join(detected_objects)} "
-            f"in videos for children"
-        )
+    video_confidences = [d["confidence"] for d in rtdetr_detections]
+    video_max_conf = max(video_confidences) if video_confidences else 0.0
 
-        query_embedding = embedder.encode([query]).astype("float32")
-        _, idx = index.search(query_embedding, k=3)
+    for det in rtdetr_detections:
+        conf = det["confidence"]
+        time_sec = det.get("time", 0.0)
 
-        for i in idx[0]:
-            policy = policy_metadata[i]
+        if conf < VIDEO_POLICY_THRESHOLD:
+            continue
 
-            severity = determine_severity(
-                detected_objects,
-                policy.get("severity_rules", {})
-            )
+        query = "violent physical attack detected visually"
+        q_emb = embedder.encode([query]).astype("float32")
+        _, idxs = index.search(q_emb, k=3)
+
+        for i in idxs[0]:
+            policy = policy_meta[i]
+
+            # ✅ Modality filter
+            if "video" not in policy["applies_to"]:
+                continue
 
             violations.append({
+                "modality": "video",
                 "policy_id": policy["policy_id"],
                 "policy_name": policy["policy_name"],
                 "category": policy["category"],
-                "severity": severity,
-                "timestamp": f"{sec_to_timestamp(start)} - {sec_to_timestamp(end)}",
-                "reason": (
-                    f"Detected {', '.join(detected_objects)} violates "
-                    f"{policy['policy_name']} guidelines"
-                )
+                "severity": determine_severity(conf),
+                "confidence": conf,
+                "timestamp": sec_to_timestamp(time_sec),
+                "reason": "Detected violent visual activity (RT-DETR)"
             })
 
-    # -------- Deduplicate --------
-    unique = {json.dumps(v, sort_keys=True): v for v in violations}
-    violations = list(unique.values())
+    # ==================================================
+    # AUDIO TOXICITY / THREATS
+    # ==================================================
 
-    # -------- Save output --------
+    audio_confidences = [a["confidence"] for a in audio_violations]
+    audio_max_conf = max(audio_confidences) if audio_confidences else 0.0
+
+    for a in audio_violations:
+        conf = a["confidence"]
+
+        if conf < AUDIO_POLICY_THRESHOLD:
+            continue
+
+        query = "violent or threatening speech"
+        q_emb = embedder.encode([query]).astype("float32")
+        _, idxs = index.search(q_emb, k=3)
+
+        for i in idxs[0]:
+            policy = policy_meta[i]
+
+            # ✅ Modality filter
+            if "audio" not in policy["applies_to"]:
+                continue
+
+            violations.append({
+                "modality": "audio",
+                "policy_id": policy["policy_id"],
+                "policy_name": policy["policy_name"],
+                "category": policy["category"],
+                "severity": determine_severity(conf),
+                "confidence": conf,
+                "timestamp": (
+                    f"{sec_to_timestamp(a['start'])} - "
+                    f"{sec_to_timestamp(a['end'])}"
+                ),
+                "reason": f"Toxic or threatening speech: '{a.get('text','')}'"
+            })
+
+    # ==================================================
+    # FINALIZE OUTPUT
+    # ==================================================
+
+    # Deduplicate
+    violations = list({
+        json.dumps(v, sort_keys=True): v for v in violations
+    }.values())
+
+    fusion_severity = determine_fusion_severity(
+        video_max_conf, audio_max_conf
+    )
+
     output = {
         "video_id": video_id,
+        "fusion_severity": fusion_severity,
+        "video_max_confidence": round(video_max_conf, 3),
+        "audio_max_confidence": round(audio_max_conf, 3),
         "total_violations": len(violations),
         "policy_violations": violations
     }
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_file).write_text(json.dumps(output, indent=2))
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
-
-    print("✅ Policy-aware RAG reasoning completed")
+    print(f"🔥 Fusion severity: {fusion_severity}")
     print(f"📄 Output saved → {output_file}")
 
 
 # ==================================================
-# OPTIONAL: STANDALONE TEST
+# STANDALONE TEST
 # ==================================================
 
+def main():
+    evidence_path = BASE_DIR / "output" / "moderation_evidence.json"
+    output_path = BASE_DIR / "output" / "policy_violations_output.json"
+
+    print("🚀 Running standalone RAG test")
+    run_policy_rag(evidence_path, output_path)
+
+
 if __name__ == "__main__":
-    run_policy_rag(
-        evidence_file=Path("output") / "moderation_evidence.json",
-        output_file=Path("output") / "policy_violations_output.json"
-    )
+    main()

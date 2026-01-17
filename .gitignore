@@ -50,3 +50,13 @@ output/*
 *.pt
 *.faiss
 *.json
+
+output_blurred.mp4
+*.zip
+*.mp3
+
+*.mp4
+
+*.pdf
+
+!youtube_multimodal_policies.json
