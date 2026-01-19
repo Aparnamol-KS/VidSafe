@@ -148,7 +148,7 @@ FINAL REPORT:
             }
         ],
         temperature=0.1,
-        max_tokens=700
+        max_tokens=1200
     )
 
     return response.choices[0].message.content.strip()
