@@ -1,5 +1,6 @@
 import cv2
 import torch
+import torch.nn.functional as F
 from collections import deque
 from transformers import CLIPProcessor, CLIPModel
 
@@ -9,20 +10,17 @@ from transformers import CLIPProcessor, CLIPModel
 # ===============================
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
 
-# ---- Sampling & thresholds ----
-SAMPLE_EVERY_N_FRAMES = 5        # dense sampling
-CLIP_LOW_THRESHOLD = 0.22        # weak violence
-CLIP_HIGH_THRESHOLD = 0.45       # strong violence
-TEMPORAL_WINDOW = 5              # smoothing window
-TOPK_PROMPTS = 3                 # top-k similarity averaging
+SAMPLE_EVERY_N_FRAMES = 5
+CLIP_LOW_THRESHOLD = 0.22
+CLIP_HIGH_THRESHOLD = 0.45
+TEMPORAL_WINDOW = 5
+TOPK_PROMPTS = 3
 
 
 # ===============================
 # ENRICHED VIOLENCE PROMPTS
 # ===============================
 VIOLENCE_PROMPTS = [
-
-    # ---- Direct physical violence ----
     "people fighting violently",
     "a violent physical fight",
     "a person punching another person",
@@ -30,55 +28,66 @@ VIOLENCE_PROMPTS = [
     "a person beating another person",
     "a man attacking another man",
     "a woman being attacked",
-
-    # ---- Weapon-based violence ----
     "a person attacking with a knife",
     "a person attacking with a gun",
     "a weapon being used to attack someone",
     "a stabbing incident",
     "a shooting incident",
-
-    # ---- Injury & blood ----
     "blood on a person",
     "a badly injured person",
     "a person bleeding heavily",
     "a person lying injured after an attack",
-
-    # ---- Aggressive / implied violence ----
     "aggressive violent behavior",
     "a person threatening violence",
     "a violent confrontation",
     "a person being physically harmed",
-
-    # ---- Crowd / riot ----
     "mob violence",
     "a violent crowd fight",
     "riot with people fighting",
-
-    # ---- Contextual cues ----
     "police arrest involving force",
     "people restraining someone violently"
 ]
 
 
 # ===============================
+# DEVICE
+# ===============================
+_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# ===============================
 # LOAD MODEL (SINGLETON)
 # ===============================
-_device = "cuda" if torch.cuda.is_available() else "cpu"
-
 _clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(_device)
+_clip_model.eval()
+
 _clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
-# ---- Cache text embeddings ----
+
+# ===============================
+# CACHE TEXT EMBEDDINGS (SAFE)
+# ===============================
 _text_inputs = _clip_processor(
     text=VIOLENCE_PROMPTS,
     return_tensors="pt",
-    padding=True
-).to(_device)
+    padding=True,
+    truncation=True
+)
+
+_text_inputs = {k: v.to(_device) for k, v in _text_inputs.items()}
 
 with torch.no_grad():
-    _text_features = _clip_model.get_text_features(**_text_inputs)
-    _text_features = _text_features / _text_features.norm(dim=-1, keepdim=True)
+    text_outputs = _clip_model.get_text_features(**_text_inputs)
+
+    if not isinstance(text_outputs, torch.Tensor):
+        if hasattr(text_outputs, "pooler_output"):
+            _text_features = text_outputs.pooler_output
+        else:
+            raise RuntimeError("Unexpected text output structure from CLIP")
+    else:
+        _text_features = text_outputs
+
+    _text_features = F.normalize(_text_features, dim=-1)
 
 
 # ===============================
@@ -86,7 +95,7 @@ with torch.no_grad():
 # ===============================
 def run_clip_filter(video_path: str):
     """
-    Returns list of violent clips:
+    Returns list of violent segments:
     [
         {
             "start": float,
@@ -97,18 +106,21 @@ def run_clip_filter(video_path: str):
     """
 
     cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video: {video_path}")
+
     fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps <= 0:
-        fps = 30.0
+    if fps is None or fps <= 0:
+        fps = 30.0  # fallback
 
     frame_idx = 0
     violent_segments = []
     current_segment = None
 
-    # ---- Temporal smoothing ----
     score_window = deque(maxlen=TEMPORAL_WINDOW)
 
-    while cap.isOpened():
+    while True:
         ret, frame = cap.read()
         if not ret:
             break
@@ -122,16 +134,30 @@ def run_clip_filter(video_path: str):
         image_inputs = _clip_processor(
             images=rgb,
             return_tensors="pt"
-        ).to(_device)
+        )
+
+        image_inputs = {k: v.to(_device) for k, v in image_inputs.items()}
 
         with torch.no_grad():
-            image_features = _clip_model.get_image_features(**image_inputs)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            image_outputs = _clip_model.get_image_features(**image_inputs)
+
+            if not isinstance(image_outputs, torch.Tensor):
+                if hasattr(image_outputs, "pooler_output"):
+                    image_features = image_outputs.pooler_output
+                else:
+                    raise RuntimeError("Unexpected image output structure from CLIP")
+            else:
+                image_features = image_outputs
+
+            image_features = F.normalize(image_features, dim=-1)
 
             similarity = image_features @ _text_features.T
 
-            # ---- Top-K aggregation (robust) ----
-            topk_scores = torch.topk(similarity.squeeze(), k=TOPK_PROMPTS).values
+            topk_scores = torch.topk(
+                similarity.squeeze(),
+                k=min(TOPK_PROMPTS, similarity.shape[-1])
+            ).values
+
             raw_score = topk_scores.mean().item()
 
         # ---- Temporal smoothing ----
@@ -146,7 +172,7 @@ def run_clip_filter(video_path: str):
             f"smooth={smoothed_score:.3f}"
         )
 
-        # ---- Segment logic ----
+        # ---- Segment detection ----
         if smoothed_score >= CLIP_LOW_THRESHOLD:
             if current_segment is None:
                 current_segment = {
@@ -157,17 +183,19 @@ def run_clip_filter(video_path: str):
             else:
                 current_segment["end"] = time_sec
                 current_segment["confidence"] = max(
-                    current_segment["confidence"], smoothed_score
+                    current_segment["confidence"],
+                    smoothed_score
                 )
         else:
-            if current_segment:
+            if current_segment is not None:
                 violent_segments.append(current_segment)
                 current_segment = None
 
         frame_idx += 1
 
-    if current_segment:
+    if current_segment is not None:
         violent_segments.append(current_segment)
 
     cap.release()
+
     return violent_segments
