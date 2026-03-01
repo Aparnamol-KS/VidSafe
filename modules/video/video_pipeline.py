@@ -3,7 +3,7 @@ from .clip_filter import run_clip_filter
 from .rtdetr_detector import run_rtdetr_detector
 from .segment_builder import build_segments_from_detections
 from .temporal_filter import apply_temporal_consistency
-from ...config import RTDETR_MIN_CONSECUTIVE_FRAMES
+from config import RTDETR_MIN_CONSECUTIVE_FRAMES
 
 
 def run_video_pipeline(video_path: str, output_path: str):

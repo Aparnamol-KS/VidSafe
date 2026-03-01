@@ -5,7 +5,7 @@ VidSafe backend entry.
 Used only for manual testing.
 """
 
-from vidsafe.modules.pipeline import VidSafePipeline
+from modules.pipeline import VidSafePipeline
 
 if __name__ == "__main__":
     pipeline = VidSafePipeline("outputs")

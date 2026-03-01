@@ -1,10 +1,10 @@
 from pathlib import Path
 import json
 
-from .audio.audio_pipeline import AudioPipeline
-from .video.video_pipeline import run_video_pipeline
-from .fusion.aligner import fuse_modalities
-from .reasoning.rag_engine import run_policy_rag
+from audio.audio_pipeline import AudioPipeline
+from video.video_pipeline import run_video_pipeline
+from fusion.aligner import fuse_modalities
+from reasoning.rag_engine import run_policy_rag
 
 
 class VidSafePipeline:

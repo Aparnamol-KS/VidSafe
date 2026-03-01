@@ -4,7 +4,7 @@ import logging
 from ultralytics import RTDETR
 from pathlib import Path
 
-from ...config import RTDETR_CONF_THRESHOLD
+from config import RTDETR_CONF_THRESHOLD
 from .blur import blur_region
 
 # ===============================

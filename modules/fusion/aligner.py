@@ -1,4 +1,4 @@
-from ...config import FUSION_TIME_WINDOW
+from config import FUSION_TIME_WINDOW
 
 
 def overlap(a_start, a_end, b_start, b_end):

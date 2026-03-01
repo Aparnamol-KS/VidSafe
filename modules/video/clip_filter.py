@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from collections import deque
 from transformers import CLIPProcessor, CLIPModel
 
-from ...config import (
+from config import (
     CLIP_SAMPLE_RATE,
     CLIP_THRESHOLD,
     CLIP_TEMPORAL_WINDOW

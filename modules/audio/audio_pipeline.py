@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from vidsafe.config import (
+from config import (
     BEEP_FREQUENCY,
     BEEP_MIN_DURATION_MS,
     USE_BEEP

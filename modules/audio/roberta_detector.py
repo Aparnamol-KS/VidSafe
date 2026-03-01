@@ -1,7 +1,7 @@
 import torch
 import string
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from ...config import WORD_TOXICITY_THRESHOLD
+from config import WORD_TOXICITY_THRESHOLD
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

@@ -1,5 +1,5 @@
 from detoxify import Detoxify
-from ...config import SENTENCE_TOXICITY_THRESHOLD
+from config import SENTENCE_TOXICITY_THRESHOLD
 
 
 class SentenceToxicityDetector:

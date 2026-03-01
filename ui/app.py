@@ -8,7 +8,7 @@ import tempfile
 # -------------------------------------------------
 # IMPORT CLEAN PIPELINE
 # -------------------------------------------------
-from ..modules.pipeline import VidSafePipeline
+from modules.pipeline import VidSafePipeline
 from .pdf_utils import generate_policy_pdf_bytes
 from .policy_reducer import reduce_policy_violations_to_text
 
