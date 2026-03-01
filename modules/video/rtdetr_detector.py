@@ -4,53 +4,43 @@ import logging
 from ultralytics import RTDETR
 from pathlib import Path
 
+from ...config import RTDETR_CONF_THRESHOLD
 from .blur import blur_region
 
-
 # ===============================
-# LOGGING CONFIG
+# LOGGING
 # ===============================
 logger = logging.getLogger("RTDETR")
 logger.setLevel(logging.INFO)
 
 if not logger.handlers:
     handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "[%(levelname)s][RTDETR] %(message)s"
-    )
+    formatter = logging.Formatter("[%(levelname)s][RT-DETR] %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
+# ===============================
+# LOAD MODEL
+# ===============================
+BASE_DIR = Path(__file__).resolve().parents[2]
+WEIGHTS_PATH = BASE_DIR / "models" / "rtdetr_train.pt"
 
-# ===============================
-# CONFIG
-# ===============================
-BASE_DIR = Path(__file__).parent
-RTDETR_WEIGHTS = BASE_DIR / "rtdetr_train.pt"
-DETECTION_CONF = 0.40
-
-
-# ===============================
-# LOAD MODEL (ONCE)
-# ===============================
 _device = "cuda" if torch.cuda.is_available() else "cpu"
-logger.info(f"Loading RT-DETR model on {_device}")
-_detector = RTDETR(RTDETR_WEIGHTS)
-logger.info("RT-DETR model loaded successfully")
 
+logger.info(f"Loading RT-DETR model on {_device}")
+_detector = RTDETR(WEIGHTS_PATH)
+logger.info("RT-DETR model loaded successfully")
 
 # ===============================
 # DETECTOR
 # ===============================
 def run_rtdetr_detector(video_path: str, violent_clips: list):
     """
-    Runs RT-DETR on frames selected by CLIP.
+    Runs RT-DETR only inside CLIP-flagged windows.
 
     Returns:
     {
-        "blurred_frames": {
-            frame_idx: frame (np.ndarray)
-        },
+        "blurred_frames": { frame_idx: frame },
         "detections": [
             {
                 "frame": int,
@@ -62,13 +52,8 @@ def run_rtdetr_detector(video_path: str, violent_clips: list):
     }
     """
 
-    logger.info(f"Starting RT-DETR detection on video: {video_path}")
-
     cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps <= 0:
-        fps = 30.0
-        logger.warning("FPS not detected. Falling back to 30 FPS.")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
     blurred_frames = {}
     detections_out = []
@@ -82,7 +67,7 @@ def run_rtdetr_detector(video_path: str, violent_clips: list):
 
         time_sec = frame_idx / fps
 
-        # ---- Gate using CLIP windows ----
+        # Gate using CLIP segments
         if not any(
             clip["start"] <= time_sec <= clip["end"]
             for clip in violent_clips
@@ -90,24 +75,18 @@ def run_rtdetr_detector(video_path: str, violent_clips: list):
             frame_idx += 1
             continue
 
-        # ---- RT-DETR inference ----
         results = _detector.predict(
             source=frame,
-            conf=DETECTION_CONF,
+            conf=RTDETR_CONF_THRESHOLD,
             verbose=False
         )[0]
 
         if results.boxes is not None and len(results.boxes) > 0:
-            logger.info(
-                f"Frame {frame_idx} | "
-                f"{len(results.boxes)} violent regions detected"
-            )
 
             for box in results.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
 
-                # Blur region
                 frame = blur_region(frame, (x1, y1, x2, y2))
 
                 detections_out.append({

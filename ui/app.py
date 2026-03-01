@@ -3,34 +3,25 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
-import time
+import tempfile
 
-
-import sys
-
-# Add project root to Python path
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(PROJECT_ROOT))
-
-
-from core.pipeline import VidSafePipeline
-from pdf_utils import generate_policy_pdf_bytes
-from policy_reducer import reduce_policy_violations_to_text
-
+# -------------------------------------------------
+# IMPORT CLEAN PIPELINE
+# -------------------------------------------------
+from ..modules.pipeline import VidSafePipeline
+from .pdf_utils import generate_policy_pdf_bytes
+from .policy_reducer import reduce_policy_violations_to_text
 
 # -------------------------------------------------
 # CONFIG
 # -------------------------------------------------
-INPUT_VIDEO = "input_video.mp4"
 OUTPUT_DIR = "outputs"
-
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-pipeline = VidSafePipeline(output_dir=Path(OUTPUT_DIR))
-
+pipeline = VidSafePipeline(output_dir=OUTPUT_DIR)
 
 # -------------------------------------------------
-# SESSION STATE INITIALIZATION
+# SESSION STATE INIT
 # -------------------------------------------------
 st.session_state.setdefault("policy_report", None)
 st.session_state.setdefault("pdf_bytes", None)
@@ -38,7 +29,6 @@ st.session_state.setdefault("video_ready", False)
 st.session_state.setdefault("analysis_done", False)
 st.session_state.setdefault("output_video", None)
 st.session_state.setdefault("raw_policy_json", None)
-
 
 # -------------------------------------------------
 # PAGE CONFIG
@@ -48,7 +38,6 @@ st.set_page_config(
     page_icon="🎥",
     layout="wide"
 )
-
 
 # -------------------------------------------------
 # HEADER
@@ -68,7 +57,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
 # -------------------------------------------------
 # UPLOAD SECTION
 # -------------------------------------------------
@@ -80,44 +68,48 @@ uploaded_video = st.file_uploader(
 )
 
 if uploaded_video and not st.session_state.analysis_done:
+
     col1, col2 = st.columns([1.2, 1])
 
-    # -------- INPUT VIDEO PREVIEW --------
+    # -------------------------------
+    # INPUT PREVIEW
+    # -------------------------------
     with col1:
         st.markdown("### Input Video Preview")
         st.video(uploaded_video)
 
-    # -------- VIDEO DETAILS + ACTION --------
+    # -------------------------------
+    # VIDEO DETAILS
+    # -------------------------------
     with col2:
         st.markdown("### Video Details")
         st.write(f"**Filename:** {uploaded_video.name}")
         st.write(f"**Size:** {uploaded_video.size / (1024 * 1024):.2f} MB")
 
         if st.button("▶ Start Analysis", use_container_width=True):
-            with st.status(
-                "Processing video for safety analysis...",
-                expanded=False
-            ):
 
-                # Save video
-                with open(INPUT_VIDEO, "wb") as f:
-                    f.write(uploaded_video.read())
+            with st.status("Processing video for safety analysis..."):
 
-                input_path = Path(INPUT_VIDEO).resolve()
+                # Save uploaded file temporarily
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+                    tmp.write(uploaded_video.read())
+                    input_path = tmp.name
 
-                # Run full pipeline (single blocking call)
+                # Run clean pipeline
                 results = pipeline.run(input_path)
 
-                st.session_state.output_video = str(results["final_video"])
-                st.session_state.raw_policy_json = str(results["policy_report"])
+                st.session_state.output_video = results["blurred_video"]
+                st.session_state.raw_policy_json = results["policy_report"]
 
+                # Load raw RAG output
                 with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
                     raw_policy_output = json.load(f)
 
-                # Generate report
+                # Generate natural-language moderation report
                 policy_report = reduce_policy_violations_to_text(raw_policy_output)
                 st.session_state.policy_report = policy_report
 
+                # Build PDF payload
                 pdf_payload = {
                     "video_name": uploaded_video.name,
                     "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -130,19 +122,22 @@ if uploaded_video and not st.session_state.analysis_done:
                         if raw_policy_output.get("fusion_severity") == "Critical"
                         else "Age Restrict"
                         if raw_policy_output.get("fusion_severity") == "High"
-                        else "Content Review Recommended"
+                        else "Limited Distribution"
+                        if raw_policy_output.get("fusion_severity") == "Medium"
+                        else "Allow"
                     ),
                     "flagged_segments": raw_policy_output.get("policy_violations", []),
                     "explanation": policy_report
                 }
 
                 st.session_state.pdf_bytes = generate_policy_pdf_bytes(pdf_payload)
+
                 st.session_state.video_ready = True
                 st.session_state.analysis_done = True
 
             st.success("Video analysis completed successfully.")
 
-
+        # Show Fusion Severity Metric
         if st.session_state.raw_policy_json:
             with open(st.session_state.raw_policy_json, "r", encoding="utf-8") as f:
                 raw_policy_output = json.load(f)
@@ -153,19 +148,19 @@ if uploaded_video and not st.session_state.analysis_done:
                 value=raw_policy_output.get("fusion_severity", "Unknown")
             )
 
-
-
-
 # -------------------------------------------------
 # RESULTS SECTION
 # -------------------------------------------------
 if st.session_state.video_ready:
+
     st.markdown("<hr>", unsafe_allow_html=True)
     st.subheader("Analysis Results")
 
     left, right = st.columns([1, 1])
 
-    # -------- PROCESSED VIDEO --------
+    # -------------------------------
+    # PROCESSED VIDEO
+    # -------------------------------
     with left:
         st.markdown("### Processed Video")
         st.video(st.session_state.output_video)
@@ -179,7 +174,9 @@ if st.session_state.video_ready:
                 use_container_width=True
             )
 
-    # -------- POLICY REPORT --------
+    # -------------------------------
+    # POLICY REPORT
+    # -------------------------------
     with right:
         st.markdown("### Policy Assessment")
         st.markdown("#### 📝 Moderation Report")
@@ -199,12 +196,13 @@ if st.session_state.video_ready:
             use_container_width=True
         )
 
-
 # -------------------------------------------------
 # RESET OPTION
 # -------------------------------------------------
 if st.session_state.analysis_done:
+
     st.markdown("<hr>", unsafe_allow_html=True)
+
     if st.button("🔄 Analyze Another Video", use_container_width=True):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
