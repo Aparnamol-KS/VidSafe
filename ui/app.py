@@ -5,12 +5,19 @@ from datetime import datetime
 from pathlib import Path
 import tempfile
 
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 # -------------------------------------------------
 # IMPORT CLEAN PIPELINE
 # -------------------------------------------------
 from modules.pipeline import VidSafePipeline
-from .pdf_utils import generate_policy_pdf_bytes
-from .policy_reducer import reduce_policy_violations_to_text
+
+from ui.pdf_utils import generate_policy_pdf_bytes
+from ui.policy_reducer import reduce_policy_violations_to_text
 
 # -------------------------------------------------
 # CONFIG

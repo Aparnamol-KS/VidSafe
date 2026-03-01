@@ -53,7 +53,7 @@ VIOLENCE_PROMPTS = [
 _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ===============================
-# LOAD MODEL (SINGLETON)
+# LOAD MODEL (ONCE)
 # ===============================
 _clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(_device)
 _clip_model.eval()
@@ -61,18 +61,44 @@ _clip_model.eval()
 _clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
 # ===============================
+# SAFE FEATURE EXTRACTION HELPER
+# ===============================
+def _extract_tensor(output):
+    """
+    Handles Tensor or ModelOutput safely.
+    """
+    if isinstance(output, torch.Tensor):
+        return output
+
+    if hasattr(output, "pooler_output"):
+        return output.pooler_output
+
+    if isinstance(output, (list, tuple)):
+        return output[0]
+
+    raise RuntimeError("Unexpected CLIP output type")
+
+
+# ===============================
 # CACHE TEXT EMBEDDINGS
 # ===============================
 with torch.no_grad():
+
     text_inputs = _clip_processor(
         text=VIOLENCE_PROMPTS,
         return_tensors="pt",
         padding=True,
         truncation=True
-    ).to(_device)
+    )
 
-    text_features = _clip_model.get_text_features(**text_inputs)
+    text_inputs = {k: v.to(_device) for k, v in text_inputs.items()}
+
+    text_outputs = _clip_model.get_text_features(**text_inputs)
+
+    text_features = _extract_tensor(text_outputs)
+
     text_features = F.normalize(text_features, dim=-1)
+
 
 # ===============================
 # CLIP FILTER
@@ -93,7 +119,9 @@ def run_clip_filter(video_path: str):
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open video: {video_path}")
 
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or fps <= 0:
+        fps = 30.0
 
     frame_idx = 0
     segments = []
@@ -114,19 +142,26 @@ def run_clip_filter(video_path: str):
         image_inputs = _clip_processor(
             images=rgb,
             return_tensors="pt"
-        ).to(_device)
+        )
+
+        image_inputs = {k: v.to(_device) for k, v in image_inputs.items()}
 
         with torch.no_grad():
-            image_features = _clip_model.get_image_features(**image_inputs)
+
+            image_outputs = _clip_model.get_image_features(**image_inputs)
+
+            image_features = _extract_tensor(image_outputs)
+
             image_features = F.normalize(image_features, dim=-1)
 
             similarity = image_features @ text_features.T
+
             topk_scores = torch.topk(
-                similarity.squeeze(),
+                similarity.squeeze(0),
                 k=min(TOPK_PROMPTS, similarity.shape[-1])
             ).values
 
-            raw_score = topk_scores.mean().item()
+            raw_score = float(topk_scores.mean().cpu())
 
         score_window.append(raw_score)
         smoothed_score = sum(score_window) / len(score_window)
@@ -157,4 +192,5 @@ def run_clip_filter(video_path: str):
         segments.append(current_segment)
 
     cap.release()
+
     return segments
