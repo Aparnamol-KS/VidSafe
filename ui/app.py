@@ -42,7 +42,6 @@ st.session_state.setdefault("raw_policy_json", None)
 # -------------------------------------------------
 st.set_page_config(
     page_title="VidSafe – Video Safety Platform",
-    page_icon="🎥",
     layout="wide"
 )
 

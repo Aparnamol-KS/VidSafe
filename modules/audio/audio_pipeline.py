@@ -48,7 +48,7 @@ class AudioPipeline:
         # -------------------------
         # 4️⃣ Word-level toxicity
         # -------------------------
-        toxic_words = detect_toxic_words(segments)
+        toxic_words = detect_toxic_words(segments)  #todo------------------------------------------------
 
         # -------------------------
         # 5️⃣ Censoring
