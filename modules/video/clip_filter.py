@@ -25,26 +25,32 @@ VIOLENCE_PROMPTS = [
     "a person punching another person",
     "a person kicking another person",
     "a person beating another person",
+    "a physical assault between people",
+    "a person violently attacking someone",
+
     "a man attacking another man",
     "a woman being attacked",
+    "a person attacking another person",
+
     "a person attacking with a knife",
     "a person attacking with a gun",
     "a weapon being used to attack someone",
+    "a violent attack with a weapon",
     "a stabbing incident",
     "a shooting incident",
+
     "blood on a person",
     "a badly injured person",
     "a person bleeding heavily",
     "a person lying injured after an attack",
+
     "aggressive violent behavior",
     "a person threatening violence",
     "a violent confrontation",
-    "a person being physically harmed",
+
     "mob violence",
     "a violent crowd fight",
-    "riot with people fighting",
-    "police arrest involving force",
-    "people restraining someone violently"
+    "riot with people fighting"
 ]
 
 # ===============================
