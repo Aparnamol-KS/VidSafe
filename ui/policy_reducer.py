@@ -43,7 +43,6 @@ def compress_policy_output(
         timestamp = v.get("timestamp", "N/A")
         reason = v.get("reason", "Policy violation detected")
 
-        # ---- KEY CHANGE: MODALITY INCLUDED ----
         key = f"{policy_name}|{category}|{modality}"
 
         grouped[key]["policy_name"] = policy_name

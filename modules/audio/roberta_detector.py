@@ -15,19 +15,6 @@ model = AutoModelForSequenceClassification.from_pretrained(
 
 model.eval()
 
-def get_toxic_label(word: str) -> str:
-
-    threat_words = {"kill", "die", "murder", "destroy"}
-    abuse_words = {"idiot", "stupid", "moron", "dumb"}
-
-    if word in threat_words:
-        return "threatening speech"
-
-    if word in abuse_words:
-        return "verbal abuse"
-
-    return "aggressive speech"
-
 def normalize_word(w: str) -> str:
     return w.strip().lower().translate(
         str.maketrans("", "", string.punctuation)

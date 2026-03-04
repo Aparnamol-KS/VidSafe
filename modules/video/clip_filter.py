@@ -1,7 +1,7 @@
 import cv2
 import torch
 import torch.nn.functional as F
-from collections import deque
+from collections import deque, Counter
 from transformers import CLIPProcessor, CLIPModel
 
 from config import (
@@ -116,16 +116,18 @@ def run_clip_filter(video_path: str):
             "start": float,
             "end": float,
             "confidence": float,
-            "queries": [list of matched prompts]
+            "queries": [top matched prompts]
         }
     ]
     """
 
     cap = cv2.VideoCapture(video_path)
+
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open video: {video_path}")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
+
     if not fps or fps <= 0:
         fps = 30.0
 
@@ -138,9 +140,11 @@ def run_clip_filter(video_path: str):
     while True:
 
         ret, frame = cap.read()
+
         if not ret:
             break
 
+        # sample frames
         if frame_idx % CLIP_SAMPLE_RATE != 0:
             frame_idx += 1
             continue
@@ -164,9 +168,9 @@ def run_clip_filter(video_path: str):
 
             similarity = image_features @ text_features.T
 
-            # -------------------------------
-            # GET TOP-K PROMPTS
-            # -------------------------------
+            # ---------------------------
+            # Top-K prompt selection
+            # ---------------------------
             topk = torch.topk(
                 similarity.squeeze(0),
                 k=min(TOPK_PROMPTS, similarity.shape[-1])
@@ -177,7 +181,6 @@ def run_clip_filter(video_path: str):
 
             raw_score = float(topk_scores.mean().cpu())
 
-            # convert indices → prompt text
             topk_prompts = [
                 VIOLENCE_PROMPTS[i] for i in topk_indices.cpu().tolist()
             ]
@@ -188,6 +191,9 @@ def run_clip_filter(video_path: str):
 
         time_sec = frame_idx / fps
 
+        # ---------------------------
+        # Segment logic
+        # ---------------------------
         if smoothed_score >= CLIP_THRESHOLD:
 
             if current_segment is None:
@@ -196,7 +202,7 @@ def run_clip_filter(video_path: str):
                     "start": time_sec,
                     "end": time_sec,
                     "confidence": smoothed_score,
-                    "queries": set(topk_prompts)
+                    "query_counter": Counter(topk_prompts)
                 }
 
             else:
@@ -208,14 +214,20 @@ def run_clip_filter(video_path: str):
                     smoothed_score
                 )
 
-                current_segment["queries"].update(topk_prompts)
+                current_segment["query_counter"].update(topk_prompts)
 
         else:
 
             if current_segment is not None:
 
-                # convert set → list
-                current_segment["queries"] = list(current_segment["queries"])
+                # select most frequent prompts
+                top_queries = [
+                    q for q, _ in
+                    current_segment["query_counter"].most_common(TOPK_PROMPTS)
+                ]
+
+                current_segment["queries"] = top_queries
+                del current_segment["query_counter"]
 
                 segments.append(current_segment)
 
@@ -223,38 +235,19 @@ def run_clip_filter(video_path: str):
 
         frame_idx += 1
 
+    # finalize last segment
     if current_segment is not None:
 
-        current_segment["queries"] = list(current_segment["queries"])
+        top_queries = [
+            q for q, _ in
+            current_segment["query_counter"].most_common(TOPK_PROMPTS)
+        ]
+
+        current_segment["queries"] = top_queries
+        del current_segment["query_counter"]
 
         segments.append(current_segment)
 
     cap.release()
 
     return segments
-
-
-
-
-
-
-
-
-
-
-
-
-# Example output
-
-# [
-#   {
-#     "start": 12.4,
-#     "end": 17.2,
-#     "confidence": 0.81,
-#     "queries": [
-#       "a person punching another person",
-#       "people fighting violently",
-#       "a violent physical fight"
-#     ]
-#   }
-# ]
