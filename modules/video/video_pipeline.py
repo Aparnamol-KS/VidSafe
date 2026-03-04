@@ -6,6 +6,26 @@ from .temporal_filter import apply_temporal_consistency
 from config import RTDETR_MIN_CONSECUTIVE_FRAMES
 
 
+def _match_clip_queries(segment, clip_segments):
+    """
+    Find CLIP queries overlapping with the given segment.
+    """
+
+    matched_queries = set()
+
+    for clip in clip_segments:
+
+        overlap = not (
+            segment["end"] < clip["start"] or
+            segment["start"] > clip["end"]
+        )
+
+        if overlap:
+            matched_queries.update(clip.get("queries", []))
+
+    return list(matched_queries)
+
+
 def run_video_pipeline(video_path: str, output_path: str):
 
     # -------------------------------
@@ -44,6 +64,7 @@ def run_video_pipeline(video_path: str, output_path: str):
     # Stage 4: Video metadata
     # -------------------------------
     cap = cv2.VideoCapture(video_path)
+
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -55,6 +76,16 @@ def run_video_pipeline(video_path: str, output_path: str):
         stable_detections,
         fps
     )
+
+    # --------------------------------
+    # Attach CLIP semantic queries
+    # --------------------------------
+    for seg in segments:
+
+        seg["vision_queries"] = _match_clip_queries(
+            seg,
+            clip_segments
+        )
 
     video_max_confidence = (
         max(d["confidence"] for d in stable_detections)
@@ -70,6 +101,7 @@ def run_video_pipeline(video_path: str, output_path: str):
     frame_idx = 0
 
     while cap.isOpened():
+
         ret, frame = cap.read()
         if not ret:
             break

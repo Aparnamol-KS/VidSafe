@@ -19,6 +19,24 @@ class AudioPipeline:
         self.transcriber = WhisperTranscriber()
         self.sentence_detector = SentenceToxicityDetector()
 
+    def _build_audio_events(self, toxic_words):
+        """
+        Convert toxic words into audio events for fusion layer.
+        """
+
+        events = []
+
+        for w in toxic_words:
+
+            events.append({
+                "start": float(w["start"]),
+                "end": float(w["end"]),
+                "confidence": float(w["confidence"]),
+                "label": w.get("label", "aggressive speech")
+            })
+
+        return events
+
     def run(self, input_video: str, work_dir: str):
 
         work_dir = Path(work_dir)
@@ -48,10 +66,15 @@ class AudioPipeline:
         # -------------------------
         # 4️⃣ Word-level toxicity
         # -------------------------
-        toxic_words = detect_toxic_words(segments)  #todo------------------------------------------------
+        toxic_words = detect_toxic_words(segments)
 
         # -------------------------
-        # 5️⃣ Censoring
+        # 5️⃣ Convert to audio events
+        # -------------------------
+        audio_events = self._build_audio_events(toxic_words)
+
+        # -------------------------
+        # 6️⃣ Censoring
         # -------------------------
         if toxic_words:
             censor_audio(
@@ -69,5 +92,6 @@ class AudioPipeline:
             "segments": segments,
             "toxic_sentences": toxic_sentences,
             "word_level_toxic": toxic_words,
+            "audio_events": audio_events,
             "censored_audio": str(censored_audio_path)
         }

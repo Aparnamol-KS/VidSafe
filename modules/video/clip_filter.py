@@ -59,7 +59,7 @@ VIOLENCE_PROMPTS = [
 _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ===============================
-# LOAD MODEL (ONCE)
+# LOAD MODEL
 # ===============================
 _clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(_device)
 _clip_model.eval()
@@ -67,12 +67,10 @@ _clip_model.eval()
 _clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
 # ===============================
-# SAFE FEATURE EXTRACTION HELPER
+# SAFE FEATURE EXTRACTION
 # ===============================
 def _extract_tensor(output):
-    """
-    Handles Tensor or ModelOutput safely.
-    """
+
     if isinstance(output, torch.Tensor):
         return output
 
@@ -110,13 +108,15 @@ with torch.no_grad():
 # CLIP FILTER
 # ===============================
 def run_clip_filter(video_path: str):
+
     """
     Returns:
     [
         {
             "start": float,
             "end": float,
-            "confidence": float
+            "confidence": float,
+            "queries": [list of matched prompts]
         }
     ]
     """
@@ -132,9 +132,11 @@ def run_clip_filter(video_path: str):
     frame_idx = 0
     segments = []
     current_segment = None
+
     score_window = deque(maxlen=CLIP_TEMPORAL_WINDOW)
 
     while True:
+
         ret, frame = cap.read()
         if not ret:
             break
@@ -162,41 +164,97 @@ def run_clip_filter(video_path: str):
 
             similarity = image_features @ text_features.T
 
-            topk_scores = torch.topk(
+            # -------------------------------
+            # GET TOP-K PROMPTS
+            # -------------------------------
+            topk = torch.topk(
                 similarity.squeeze(0),
                 k=min(TOPK_PROMPTS, similarity.shape[-1])
-            ).values
+            )
+
+            topk_scores = topk.values
+            topk_indices = topk.indices
 
             raw_score = float(topk_scores.mean().cpu())
 
+            # convert indices → prompt text
+            topk_prompts = [
+                VIOLENCE_PROMPTS[i] for i in topk_indices.cpu().tolist()
+            ]
+
         score_window.append(raw_score)
+
         smoothed_score = sum(score_window) / len(score_window)
 
         time_sec = frame_idx / fps
 
         if smoothed_score >= CLIP_THRESHOLD:
+
             if current_segment is None:
+
                 current_segment = {
                     "start": time_sec,
                     "end": time_sec,
-                    "confidence": smoothed_score
+                    "confidence": smoothed_score,
+                    "queries": set(topk_prompts)
                 }
+
             else:
+
                 current_segment["end"] = time_sec
+
                 current_segment["confidence"] = max(
                     current_segment["confidence"],
                     smoothed_score
                 )
+
+                current_segment["queries"].update(topk_prompts)
+
         else:
+
             if current_segment is not None:
+
+                # convert set → list
+                current_segment["queries"] = list(current_segment["queries"])
+
                 segments.append(current_segment)
+
                 current_segment = None
 
         frame_idx += 1
 
     if current_segment is not None:
+
+        current_segment["queries"] = list(current_segment["queries"])
+
         segments.append(current_segment)
 
     cap.release()
 
     return segments
+
+
+
+
+
+
+
+
+
+
+
+
+# Example output
+
+# [
+#   {
+#     "start": 12.4,
+#     "end": 17.2,
+#     "confidence": 0.81,
+#     "queries": [
+#       "a person punching another person",
+#       "people fighting violently",
+#       "a violent physical fight"
+#     ]
+#   }
+# ]

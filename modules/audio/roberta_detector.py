@@ -15,6 +15,18 @@ model = AutoModelForSequenceClassification.from_pretrained(
 
 model.eval()
 
+def get_toxic_label(word: str) -> str:
+
+    threat_words = {"kill", "die", "murder", "destroy"}
+    abuse_words = {"idiot", "stupid", "moron", "dumb"}
+
+    if word in threat_words:
+        return "threatening speech"
+
+    if word in abuse_words:
+        return "verbal abuse"
+
+    return "aggressive speech"
 
 def normalize_word(w: str) -> str:
     return w.strip().lower().translate(
@@ -45,6 +57,19 @@ def score_words(words):
         for w, p in zip(words, probs)
     }
 
+def get_toxic_label(word: str) -> str:
+
+    threat_words = {"kill", "die", "murder", "destroy"}
+    abuse_words = {"idiot", "stupid", "moron", "dumb"}
+
+    if word in threat_words:
+        return "threatening speech"
+
+    if word in abuse_words:
+        return "verbal abuse"
+
+    return "aggressive speech"
+
 
 def detect_toxic_words(segments):
     candidate_words = []
@@ -67,11 +92,13 @@ def detect_toxic_words(segments):
     for word, prob in word_probs.items():
         if prob >= WORD_TOXICITY_THRESHOLD:
             for wobj in candidate_map[word]:
+                label = get_toxic_label(word)
                 toxic_segments.append({
                     "start": float(wobj["start"]),
                     "end": float(wobj["end"]),
                     "word": wobj["word"],
-                    "confidence": prob
+                    "confidence": prob,
+                    "label": label
                 })
 
     return toxic_segments
