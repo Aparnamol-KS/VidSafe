@@ -39,8 +39,7 @@ def init_session():
         "analysis_done": False,
         "output_video": None,
         "raw_policy_json": None,
-        "uploaded_video": None,
-        "seek_time": 0   # 🔥 NEW (timeline control)
+        "uploaded_video": None
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -71,18 +70,6 @@ st.markdown("""
     margin-bottom: 12px;
     color: #f9fafb;
 }
-.badge {
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 14px;
-}
-.timeline-item {
-    padding: 10px;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    cursor: pointer;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -106,7 +93,7 @@ def render_header():
 def reset_app():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.experimental_rerun()
+    st.rerun()
 
 # -------------------------------------------------
 # PIPELINE
@@ -127,13 +114,29 @@ def run_pipeline(uploaded_video):
         with open(st.session_state.raw_policy_json) as f:
             raw = json.load(f)
 
-        st.session_state.policy_report = reduce_policy_violations_to_text(raw)
+        report = reduce_policy_violations_to_text(raw)
+        st.session_state.policy_report = report
+
+        # ------------------------------
+        # PDF GENERATION
+        # ------------------------------
+        pdf_payload = {
+            "video_name": uploaded_video.name,
+            "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "detected_categories": list({v["category"] for v in raw.get("policy_violations", [])}),
+            "severity_level": raw.get("fusion_severity", "Medium"),
+            "policy_decision": "Auto Moderation Applied",
+            "flagged_segments": raw.get("policy_violations", []),
+            "explanation": report
+        }
+
+        st.session_state.pdf_bytes = generate_policy_pdf_bytes(pdf_payload)
 
         st.session_state.video_ready = True
         st.session_state.analysis_done = True
 
 # -------------------------------------------------
-# VIDEO SECTION (UPDATED)
+# VIDEO SECTION
 # -------------------------------------------------
 def render_video():
 
@@ -151,49 +154,23 @@ def render_video():
 
     with col2:
         st.markdown("Processed")
+        st.video(st.session_state.output_video)
 
-        # 🔥 KEY PART — seek functionality
-        st.video(st.session_state.output_video, start_time=st.session_state.seek_time)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# -------------------------------------------------
-# CLICKABLE TIMELINE 🔥
-# -------------------------------------------------
-def render_timeline():
-
-    if not st.session_state.video_ready:
-        return
-
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Violation Timeline</div>', unsafe_allow_html=True)
-
-    with open(st.session_state.raw_policy_json) as f:
-        raw = json.load(f)
-
-    violations = raw.get("policy_violations", [])
-
-    if not violations:
-        st.success("No violations detected")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-
-    for i, v in enumerate(violations):
-
-        start = int(v.get("start", 0))
-        end = int(v.get("end", 0))
-        category = v.get("category", "Unknown")
-
-        if st.button(f"{category.upper()}  |  {start}s → {end}s", key=f"timeline_{i}"):
-
-            # 🔥 THIS IS THE MAGIC
-            st.session_state.seek_time = start
-            st.experimental_rerun()
+    # ------------------------------
+    # DOWNLOAD VIDEO
+    # ------------------------------
+    with open(st.session_state.output_video, "rb") as f:
+        st.download_button(
+            "⬇ Download Processed Video",
+            f.read(),
+            file_name="vidsafe_output.mp4",
+            use_container_width=True
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------
-# POLICY
+# POLICY SECTION
 # -------------------------------------------------
 def render_policy():
 
@@ -205,10 +182,20 @@ def render_policy():
 
     st.write(st.session_state.policy_report)
 
+    # ------------------------------
+    # DOWNLOAD PDF
+    # ------------------------------
+    st.download_button(
+        "⬇ Download Policy Report (PDF)",
+        st.session_state.pdf_bytes,
+        file_name="vidsafe_policy_report.pdf",
+        use_container_width=True
+    )
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------
-# UPLOAD
+# UPLOAD SECTION
 # -------------------------------------------------
 def render_upload():
 
@@ -241,7 +228,6 @@ def main():
 
     with right:
         render_video()
-        render_timeline()   # 🔥 NEW FEATURE
         render_policy()
 
         if st.session_state.analysis_done:

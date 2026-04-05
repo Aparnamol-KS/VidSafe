@@ -16,13 +16,13 @@ USE_BEEP = True
 # CLIP
 # ==============================
 CLIP_SAMPLE_RATE = 5
-CLIP_THRESHOLD = 0.22
+CLIP_THRESHOLD = 0.25
 CLIP_TEMPORAL_WINDOW = 5
 
 # ==============================
 # RT-DETR
 # ==============================
-RTDETR_CONF_THRESHOLD = 0.25
+RTDETR_CONF_THRESHOLD = 0.35
 RTDETR_MIN_CONSECUTIVE_FRAMES = 3
 
 # ==============================
