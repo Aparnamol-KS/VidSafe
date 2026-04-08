@@ -5,6 +5,18 @@
     "category": "Violence",
     "applies_to": ["video", "audio"],
     "description": "Content depicting or describing physical violence, injury, bloodshed, or use of weapons that may shock, harm, or distress viewers.",
+    "keywords": [
+      "fight",
+      "physical assault",
+      "person hitting someone",
+      "punching",
+      "kicking",
+      "violent attack",
+      "weapon attack",
+      "blood",
+      "visible injury",
+      "violent speech"
+    ],
     "examples": [
       "Physical fights or assaults",
       "Use of weapons",
@@ -31,6 +43,14 @@
     "category": "Child Protection",
     "applies_to": ["video", "audio"],
     "description": "Content involving minors must not include violence, abuse, threats, or situations that could frighten or traumatize children.",
+    "keywords": [
+      "violence involving minors",
+      "child abuse",
+      "threats toward children",
+      "frightening scene with child",
+      "dangerous situation with minors",
+      "disturbing child content"
+    ],
     "examples": [
       "Violence involving minors",
       "Threatening language directed at children",
@@ -53,6 +73,15 @@
     "category": "Kids Content",
     "applies_to": ["video", "audio"],
     "description": "Violent, aggressive, or frightening content is not allowed in videos intended for children, including animated or verbal violence.",
+    "keywords": [
+      "cartoon fight",
+      "animated violence",
+      "cartoon character punching",
+      "aggressive shouting",
+      "threatening dialogue",
+      "violent kids content",
+      "scary cartoon scene"
+    ],
     "examples": [
       "Cartoon violence",
       "Aggressive shouting",
@@ -74,6 +103,15 @@
     "category": "Physical Harm",
     "applies_to": ["video"],
     "description": "Content depicting dangerous or violent behavior that could inspire viewers to imitate harmful acts.",
+    "keywords": [
+      "weapon handling",
+      "knife attack",
+      "gun use",
+      "explosion",
+      "dangerous stunt",
+      "assault demonstration",
+      "violent stunt"
+    ],
     "examples": [
       "Weapon handling",
       "Explosions",
@@ -98,6 +136,15 @@
     "category": "Abuse",
     "applies_to": ["audio", "video"],
     "description": "Content that includes harassment, intimidation, or violent threats toward individuals or groups.",
+    "keywords": [
+      "threatening speech",
+      "verbal abuse",
+      "aggressive shouting",
+      "violent threats",
+      "intimidation",
+      "harassment",
+      "threatening dialogue"
+    ],
     "examples": [
       "Threatening speech",
       "Verbal abuse",
@@ -121,6 +168,14 @@
     "category": "Age Restriction",
     "applies_to": ["video", "audio"],
     "description": "Content containing non-graphic violence or aggressive language that may be unsuitable for children but acceptable with age restrictions.",
+    "keywords": [
+      "non graphic fight",
+      "mild violence",
+      "verbal aggression",
+      "argument shouting",
+      "minor fight scene",
+      "aggressive conversation"
+    ],
     "examples": [
       "Non-graphic fights",
       "Mild verbal aggression"
@@ -142,6 +197,15 @@
     "category": "Psychological Harm",
     "applies_to": ["audio", "video"],
     "description": "Content designed to scare, disturb, or psychologically harm viewers, particularly children.",
+    "keywords": [
+      "terrifying scene",
+      "panic screaming",
+      "disturbing visual",
+      "horror scream",
+      "fearful dialogue",
+      "scary content",
+      "psychological fear"
+    ],
     "examples": [
       "Screaming or panic voices",
       "Terrifying dialogue",

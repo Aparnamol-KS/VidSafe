@@ -18,16 +18,16 @@ Pillow
 transformers
 sentence-transformers
 faiss-cpu
-scikit-learn
+detoxify
+sentencepiece
+protobuf
 
 # -------------------------
 # Audio
 # -------------------------
-librosa
-soundfile
-pydub
-openai-whisper
 faster-whisper
+pydub
+soundfile
 
 # -------------------------
 # UI / Reporting
@@ -35,13 +35,11 @@ faster-whisper
 streamlit
 reportlab
 python-dotenv
-markdown
 
 # -------------------------
 # LLM
 # -------------------------
 groq
-openai
 
 # -------------------------
 # Utilities

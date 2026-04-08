@@ -145,14 +145,22 @@ def generate_policy_pdf_bytes(rag_data: dict) -> bytes:
     styles = getSampleStyleSheet()
 
     # Improve base styles
-    styles["Normal"].fontSize = 10
-    styles["Normal"].leading = 14
+
+    styles["Normal"].fontSize = 11
+    styles["Normal"].leading = 15
+
 
     styles["Heading2"].fontSize = 14
     styles["Heading2"].spaceAfter = 12
 
     styles["Heading3"].fontSize = 12
     styles["Heading3"].spaceAfter = 8
+
+
+    styles["Normal"].fontName = "Helvetica"
+    styles["Heading1"].fontName = "Helvetica-Bold"
+    styles["Heading2"].fontName = "Helvetica-Bold"
+    styles["Heading3"].fontName = "Helvetica-Bold"
 
     story = []
 
