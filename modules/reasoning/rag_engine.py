@@ -1,3 +1,10 @@
+# RAG-based policy reasoning engine:
+# builds semantic queries from fused multimodal evidence,
+# generates sentence embeddings, retrieves matching moderation
+# policies using FAISS vector search, and produces timestamped
+# policy violation reports.
+
+
 import json
 from pathlib import Path
 from datetime import timedelta

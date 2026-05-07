@@ -1,3 +1,9 @@
+# CLIP-based semantic violence filtering:
+# samples video frames, preprocesses frames for CLIP inference,
+# compares image embeddings with violence-related text embeddings,
+# applies temporal smoothing, and generates violence timestamp segments
+# with semantic vision queries.
+
 import cv2
 import torch
 import torch.nn.functional as F
@@ -15,43 +21,65 @@ from config import (
 # ===============================
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
 TOPK_PROMPTS = 3
+# ===============================
+# ANIME VIOLENCE PROMPTS
+# ===============================
 
-# ===============================
-# VIOLENCE PROMPTS
-# ===============================
 VIOLENCE_PROMPTS = [
-    "people fighting violently",
-    "a violent physical fight",
-    "a person punching another person",
-    "a person kicking another person",
-    "a person beating another person",
-    "a physical assault between people",
-    "a person violently attacking someone",
 
-    "a man attacking another man",
-    "a woman being attacked",
-    "a person attacking another person",
+    # General anime violence
+    "an anime scene which is violent",
+    "an anime fight scene",
+    "an anime scene showing aggressive violence",
+    "a violent anime confrontation",
+    "an anime character behaving violently",
 
-    "a person attacking with a knife",
-    "a person attacking with a gun",
-    "a weapon being used to attack someone",
-    "a violent attack with a weapon",
-    "a stabbing incident",
-    "a shooting incident",
+    # Physical fighting
+    "anime characters fighting violently",
+    "an anime character punching another character",
+    "an anime character kicking another character",
+    "an anime battle scene",
+    "a violent hand-to-hand fight in anime",
+    "an anime scene showing physical assault",
 
-    "blood on a person",
-    "a badly injured person",
-    "a person bleeding heavily",
-    "a person lying injured after an attack",
+    # Attacks
+    "an anime character attacking another character",
+    "a violent anime attack scene",
+    "an anime scene involving a dangerous attack",
+    "an aggressive anime combat scene",
 
-    "aggressive violent behavior",
-    "a person threatening violence",
-    "a violent confrontation",
+    # Weapon violence
+    "an anime character attacking with a sword",
+    "an anime character attacking with a knife",
+    "an anime scene involving gun violence",
+    "a violent anime weapon fight",
+    "an anime stabbing scene",
+    "an anime shooting scene",
 
-    "mob violence",
-    "a violent crowd fight",
-    "riot with people fighting"
+    # Blood and injury
+    "an anime character covered in blood",
+    "an injured anime character",
+    "an anime character bleeding heavily",
+    "a violent anime injury scene",
+    "a scary anime violence scene",
+
+    # Threatening/aggressive behavior
+    "an anime character threatening violence",
+    "an aggressive anime confrontation",
+    "an anime scene with destructive violent behavior",
+
+    # Crowd/group violence
+    "multiple anime characters fighting violently",
+    "an anime riot scene",
+    "a chaotic anime battle scene",
+
+    # Feature-enhanced prompts
+    "an anime scene which is violent and scary",
+    "an anime scene which is aggressive and destructive",
+    "an anime fight scene which is hurting and violent",
+    "a disturbing violent anime scene"
 ]
+
 
 # ===============================
 # DEVICE

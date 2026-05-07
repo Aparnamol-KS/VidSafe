@@ -30,7 +30,7 @@ class VidSafePipeline:
         # ==============================
         # 1️⃣ AUDIO PIPELINE
         # ==============================
-        print("\n🔊 Running audio pipeline...")
+        print("\nRunning audio pipeline...")
         audio_results = self.audio_pipeline.run(
             str(input_video),
             str(self.audio_dir)

@@ -1,3 +1,8 @@
+# Temporal segment aggregation:
+# merges nearby frame-level violence detections from RT-DETR/CLIP
+# into continuous timestamp-based violence segments using FPS
+# conversion and gap-based temporal grouping.
+
 def build_segments_from_detections(detections, fps, gap_frames=10):
     if not detections:
         return []

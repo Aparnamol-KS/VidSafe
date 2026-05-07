@@ -16,7 +16,7 @@ USE_BEEP = True
 # CLIP
 # ==============================
 CLIP_SAMPLE_RATE = 5
-CLIP_THRESHOLD = 0.25
+CLIP_THRESHOLD = 0.35
 CLIP_TEMPORAL_WINDOW = 5
 
 # ==============================

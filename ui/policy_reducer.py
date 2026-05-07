@@ -1,3 +1,8 @@
+# Moderation report compression and summarization:
+# groups repeated policy violations, preserves representative
+# timestamps and modality-aware evidence, and uses LLM-based
+# reasoning to generate professional safety assessment reports.
+
 import os
 import json
 from collections import defaultdict

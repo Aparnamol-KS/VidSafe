@@ -1,3 +1,11 @@
+# Audio transcription pipeline:
+# extracts/splits WAV audio into chunks, converts audio to Mel spectrograms,
+# performs Faster-Whisper transcription with word-level timestamps,
+# and returns globally aligned transcript segments.
+
+
+
+
 from pathlib import Path
 import torch
 from faster_whisper import WhisperModel
@@ -15,7 +23,7 @@ class WhisperTranscriber:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         compute = "float16" if torch.cuda.is_available() else "float32"
 
-        print("🎙️ Loading Whisper model...", flush=True)
+        print("Loading Whisper model...", flush=True)
         self.model = WhisperModel(
             MODEL_NAME,
             device=device,
@@ -68,3 +76,52 @@ class WhisperTranscriber:
             audio_offset += get_audio_duration_seconds(chunk)
 
         return all_segments
+    
+
+
+
+
+
+
+
+
+
+
+
+'''
+[
+    {
+        "text": "This video contains violent content.",
+        "start": 12.4,
+        "end": 15.8,
+        "words": [
+            {
+                "word": "This",
+                "start": 12.4,
+                "end": 12.6
+            },
+            {
+                "word": "video",
+                "start": 12.7,
+                "end": 13.0
+            },
+            {
+                "word": "contains",
+                "start": 13.1,
+                "end": 13.6
+            },
+            {
+                "word": "violent",
+                "start": 13.8,
+                "end": 14.4
+            },
+            {
+                "word": "content",
+                "start": 14.5,
+                "end": 15.1
+            }
+        ]
+    }
+]
+
+'''
